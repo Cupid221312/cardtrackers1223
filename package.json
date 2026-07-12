@@ -12,10 +12,12 @@
     "backtest": "tsx scripts/backtest.ts",
     "refresh": "tsx scripts/refresh.ts",
     "scheduler": "tsx scripts/scheduler.ts",
-    "dev:all": "concurrently -n web,market -c blue,green \"npm run dev\" \"npm run scheduler\""
+    "dev:all": "concurrently -n web,market -c blue,green \"npm run dev\" \"npm run scheduler\"",
+    "check:parser": "tsx scripts/check-parser.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
+    "cheerio": "^1.2.0",
     "next": "14.2.35",
     "prisma": "^6.19.3",
     "react": "^18",

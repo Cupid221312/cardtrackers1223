@@ -26,9 +26,28 @@ recomputed from the latest data on every page load.
 
 - `npm run refresh` — run a single update cycle by hand
 - `npm run scheduler` — just the 10-minute updater (if you run `npm run dev` separately)
-- With `MOCK_MODE=false`, `src/lib/refresh.ts` is the slot where live
-  connectors (eBay via Playwright, PriceCharting, Apify) will write real
-  sales/listings into the same tables.
+## Real eBay data (no API key needed)
+
+Set `MOCK_MODE=false` in `.env` and restart `npm run dev:all`. Each 10-minute
+cycle then pulls **real sold comps and active Buy-It-Now listings** from
+eBay's public search for a rotating batch of 4 cards (every card refreshes
+roughly hourly), writing into the same tables — scores, trends, and the
+dashboard update automatically. Details:
+
+- Comps are filtered so the title must contain the player's last name and the
+  exact grade (PSA 10 won't match PSA 9), and duplicate sales are skipped via
+  the eBay item id.
+- Requests are throttled (`EBAY_REQUEST_DELAY_MS`, default 2000ms) to stay
+  polite. Don't lower it aggressively or eBay may rate-limit you.
+- Note: this must run on a normal network (your PC). Cloud sandboxes often
+  block eBay.
+- If eBay redesigns its markup and a fetch parses zero items, the raw HTML is
+  saved to `.debug/` — run `npm run check:parser` and update the selectors in
+  `src/lib/connectors/ebay.ts`.
+- Mock and live data coexist fine: live rows are tagged `source: "ebay"`.
+  For a clean slate before going live, delete `prisma/dev.db`, then
+  `npm run db:push` (skip the seed) — the dashboard fills up as real data
+  arrives.
 
 ## Deal Score engine (`src/lib/dealScore.ts`)
 

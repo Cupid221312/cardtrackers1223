@@ -14,14 +14,18 @@
  */
 import { prisma } from "./db";
 import { computeMarketStats } from "./dealScore";
+import { fetchActiveItems, fetchSoldItems, matchesCard } from "./connectors/ebay";
 
 const TICK_MINUTES = 10;
+/** Live mode: cards refreshed per 10-minute cycle (politeness rate limit). */
+const CARDS_PER_CYCLE = 4;
+const GRADES = ["PSA 10", "PSA 9"];
 
 const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
 
 export async function runRefresh(): Promise<string> {
   if (process.env.MOCK_MODE === "false") {
-    return "MOCK_MODE=false but no live data connectors are configured yet — nothing to ingest.";
+    return runLiveRefresh();
   }
 
   const now = new Date();
@@ -95,4 +99,104 @@ export async function runRefresh(): Promise<string> {
   }
 
   return `${now.toISOString()} refresh: +${newSales} sales, ${listingsSold} listings sold, +${newListings} new listings`;
+}
+
+/**
+ * Live ingest from eBay. Rotates through tracked cards (oldest data first),
+ * a few per cycle, pulling sold comps and active Buy-It-Now listings into the
+ * same tables the mock path uses. Every card gets fresh data roughly hourly
+ * with the default 12-card / 4-per-cycle setup.
+ */
+async function runLiveRefresh(): Promise<string> {
+  const now = new Date();
+  const cards = await prisma.card.findMany({
+    orderBy: [{ lastFetchedAt: { sort: "asc", nulls: "first" } }],
+    take: CARDS_PER_CYCLE,
+  });
+
+  let newSales = 0;
+  let upsertedListings = 0;
+  let delisted = 0;
+  const problems: string[] = [];
+
+  for (const card of cards) {
+    const baseQuery =
+      card.searchQuery ??
+      `${card.year} ${card.setName} ${card.playerName} ${card.cardNumber}${card.variant !== "Base" ? ` ${card.variant}` : ""}`;
+
+    for (const grade of GRADES) {
+      const query = `${baseQuery} ${grade}`;
+      try {
+        // --- sold comps ---
+        const sold = (await fetchSoldItems(query)).filter((s) => matchesCard(s.title, card.playerName, grade));
+        if (sold.length > 0) {
+          const existing = new Set(
+            (
+              await prisma.sale.findMany({
+                where: { externalId: { in: sold.map((s) => s.externalId) } },
+                select: { externalId: true },
+              })
+            ).map((s) => s.externalId)
+          );
+          for (const s of sold) {
+            if (existing.has(s.externalId)) continue;
+            await prisma.sale.create({
+              data: {
+                cardId: card.id,
+                grade,
+                price: s.price,
+                soldAt: s.soldAt,
+                source: "ebay",
+                externalId: s.externalId,
+              },
+            });
+            newSales++;
+          }
+        }
+
+        // --- active listings ---
+        const active = (await fetchActiveItems(query)).filter((a) => matchesCard(a.title, card.playerName, grade));
+        for (const a of active) {
+          await prisma.listing.upsert({
+            where: { externalId: a.externalId },
+            update: { askPrice: a.price, active: true },
+            create: {
+              cardId: card.id,
+              grade,
+              askPrice: a.price,
+              title: a.title,
+              listedAt: now,
+              source: "ebay",
+              url: a.url,
+              externalId: a.externalId,
+              active: true,
+            },
+          });
+          upsertedListings++;
+        }
+        // eBay listings for this card/grade that vanished from search results
+        // are gone (sold or ended) — retire them.
+        if (active.length > 0) {
+          const gone = await prisma.listing.updateMany({
+            where: {
+              cardId: card.id,
+              grade,
+              source: "ebay",
+              active: true,
+              externalId: { notIn: active.map((a) => a.externalId) },
+            },
+            data: { active: false },
+          });
+          delisted += gone.count;
+        }
+      } catch (e) {
+        problems.push(`${query}: ${e instanceof Error ? e.message : e}`);
+      }
+    }
+
+    await prisma.card.update({ where: { id: card.id }, data: { lastFetchedAt: now } });
+  }
+
+  const summary = `${now.toISOString()} LIVE refresh (${cards.length} cards): +${newSales} sales, ${upsertedListings} listings upserted, ${delisted} delisted`;
+  return problems.length ? `${summary}\n  issues: ${problems.join(" | ")}` : summary;
 }

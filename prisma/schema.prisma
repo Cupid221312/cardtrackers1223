@@ -17,6 +17,9 @@ model Card {
   cardNumber String
   variant    String    @default("Base")
   sport      String
+  /** Overrides the auto-built eBay search query when set. */
+  searchQuery   String?
+  lastFetchedAt DateTime?
   sales      Sale[]
   listings   Listing[]
 
@@ -31,6 +34,8 @@ model Sale {
   price  Float
   soldAt DateTime
   source String   @default("mock")
+  /** e.g. eBay item id — prevents re-ingesting the same sale. */
+  externalId String? @unique
 
   @@index([cardId, grade, soldAt])
 }
@@ -46,6 +51,7 @@ model Listing {
   source   String   @default("mock")
   url      String   @default("")
   active   Boolean  @default(true)
+  externalId String? @unique
 
   @@index([cardId, grade, active])
 }
