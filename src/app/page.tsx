@@ -2,6 +2,7 @@ import { getCards, getDeals, getOverview } from "@/lib/queries";
 import { StatTile } from "@/components/StatTile";
 import { ScoreBadge } from "@/components/ScoreBadge";
 import { Sparkline } from "@/components/Sparkline";
+import { AutoRefresh } from "@/components/AutoRefresh";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,7 @@ export default async function Dashboard() {
           <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
             Deal Scores from recency-weighted comps · updated live from the database
           </p>
+          <AutoRefresh lastSaleAt={overview.lastSaleAt} />
         </div>
         {overview.mockMode && (
           <span

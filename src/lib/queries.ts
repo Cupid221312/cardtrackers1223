@@ -68,13 +68,15 @@ export async function getCards(): Promise<CardSummary[]> {
 }
 
 export async function getOverview(): Promise<Overview> {
-  const [trackedCards, activeListings, salesTracked, deals] = await Promise.all([
+  const [trackedCards, activeListings, salesTracked, deals, lastSale] = await Promise.all([
     prisma.card.count(),
     prisma.listing.count({ where: { active: true } }),
     prisma.sale.count(),
     getDeals({ limit: 200 }),
+    prisma.sale.findFirst({ orderBy: { soldAt: "desc" }, select: { soldAt: true } }),
   ]);
   return {
+    lastSaleAt: lastSale?.soldAt.toISOString() ?? null,
     trackedCards,
     activeListings,
     salesTracked,

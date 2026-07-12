@@ -11,8 +11,24 @@ npm install
 cp .env.example .env
 npm run db:push    # create the SQLite database (prisma/dev.db)
 npm run db:seed    # seed 12 cards, ~2,700 sales comps, ~40 active listings
-npm run dev        # open http://localhost:3000
+npm run dev:all    # app + 10-minute market updates · open http://localhost:3000
 ```
+
+## Live updates (every 10 minutes)
+
+`npm run dev:all` runs the web app and the market scheduler together. The
+scheduler (`scripts/scheduler.ts`) runs a refresh cycle immediately and then
+every 10 minutes; the dashboard re-fetches itself every 60 seconds, so new
+data appears without reloading. In mock mode each cycle simulates the market
+moving — new sales at each card's own liquidity, bargain listings getting
+bought, fresh listings appearing. Prices, trends, and Deal Scores are always
+recomputed from the latest data on every page load.
+
+- `npm run refresh` — run a single update cycle by hand
+- `npm run scheduler` — just the 10-minute updater (if you run `npm run dev` separately)
+- With `MOCK_MODE=false`, `src/lib/refresh.ts` is the slot where live
+  connectors (eBay via Playwright, PriceCharting, Apify) will write real
+  sales/listings into the same tables.
 
 ## Deal Score engine (`src/lib/dealScore.ts`)
 

@@ -50,6 +50,7 @@ export const overviewSchema = z.object({
   strongBuys: z.number().int(),
   bestDeal: dealSchema.nullable(),
   mockMode: z.boolean(),
+  lastSaleAt: z.string().nullable(),
 });
 export type Overview = z.infer<typeof overviewSchema>;
 
