@@ -18,6 +18,7 @@ export const dealSchema = z.object({
   askPrice: z.number(),
   listedAt: z.string(),
   source: z.string(),
+  url: z.string(),
   score: z.number().int().min(0).max(100),
   discount: z.number(),
   label: z.enum(["strong buy", "good deal", "fair", "overpriced"]),

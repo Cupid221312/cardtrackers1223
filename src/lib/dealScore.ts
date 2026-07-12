@@ -112,3 +112,32 @@ export function scoreListing(askPrice: number, sales: SalePoint[], asOf: Date = 
   const label = score >= 80 ? "strong buy" : score >= 65 ? "good deal" : score >= 40 ? "fair" : "overpriced";
   return { score, discount, label, stats };
 }
+
+/**
+ * Plain-language reasons behind a score, for display in the UI so the number
+ * is never a black box. Mirrors the factors used in `scoreListing`.
+ */
+export function explainScore(deal: ScoredDeal): string[] {
+  const { discount, stats } = deal;
+  const reasons: string[] = [];
+  const pct = (n: number) => `${Math.abs(n * 100).toFixed(1)}%`;
+
+  reasons.push(
+    discount > 0.01
+      ? `Priced ${pct(discount)} below market value`
+      : discount < -0.01
+        ? `Priced ${pct(discount)} above market value`
+        : `Priced right at market value`
+  );
+  if (Math.abs(stats.trend30d) >= 0.02) {
+    reasons.push(`Market is ${stats.trend30d > 0 ? "rising" : "falling"} (${pct(stats.trend30d)}/30d)`);
+  }
+  reasons.push(
+    stats.confidence >= 0.75
+      ? `High confidence: ${stats.sampleSize} comps, ${stats.salesLast30d} in last 30d`
+      : stats.confidence >= 0.4
+        ? `Moderate confidence: ${stats.sampleSize} comps`
+        : `Low confidence — thin/noisy comps, score pulled toward neutral`
+  );
+  return reasons;
+}

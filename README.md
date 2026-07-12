@@ -83,6 +83,26 @@ over the following 30 days. Current seed results:
 
 Spearman rank correlation (score vs realized return): **0.82**.
 
+## Tests
+
+```bash
+npm test            # 23 unit tests: Deal Score engine + eBay parser
+npm run check:parser  # standalone parser fixture check
+```
+
+The engine tests cover market-value estimation, trend detection, confidence,
+label thresholds, score clamping, and the low-confidence shrink. The parser
+tests cover both eBay layouts, price/date parsing, and card/grade matching.
+
+## Dashboard
+
+- **Deal feed** — filter by score (All / Fair+ / Good 65+ / Strong 80+) and by
+  sport; narrowed views fetch `/api/deals` live. Click any row for a plain-
+  language breakdown of *why* it got that score (discount, trend, confidence)
+  and a link to the listing.
+- **Auto-refresh** every 60s; **empty state** with seed instructions when the
+  database has no cards yet.
+
 ## API (typed with zod — schemas in `src/lib/schemas.ts`)
 
 | Route | Description |

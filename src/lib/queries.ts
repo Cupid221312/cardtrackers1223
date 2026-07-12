@@ -28,6 +28,7 @@ export async function getDeals(opts: { minScore?: number; sport?: string; limit:
       askPrice: l.askPrice,
       listedAt: l.listedAt.toISOString(),
       source: l.source,
+      url: l.url,
       score: scored.score,
       discount: scored.discount,
       label: scored.label,

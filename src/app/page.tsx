@@ -1,8 +1,8 @@
 import { getCards, getDeals, getOverview } from "@/lib/queries";
 import { StatTile } from "@/components/StatTile";
-import { ScoreBadge } from "@/components/ScoreBadge";
 import { Sparkline } from "@/components/Sparkline";
 import { AutoRefresh } from "@/components/AutoRefresh";
+import { DealFeed } from "@/components/DealFeed";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +11,25 @@ const usd = (n: number) =>
 const pct = (n: number) => `${n >= 0 ? "+" : ""}${(n * 100).toFixed(1)}%`;
 
 export default async function Dashboard() {
-  const [overview, deals, cards] = await Promise.all([getOverview(), getDeals({ limit: 25 }), getCards()]);
+  const [overview, deals, cards] = await Promise.all([getOverview(), getDeals({ limit: 50 }), getCards()]);
+  const sports = [...new Set(cards.map((c) => c.sport))].sort();
+
+  if (overview.trackedCards === 0) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-xl flex-col items-center justify-center px-4 text-center">
+        <h1 className="text-2xl font-bold">Card Market Intel</h1>
+        <p className="mt-3 text-sm" style={{ color: "var(--text-secondary)" }}>
+          No cards are being tracked yet. Seed the database to explore with sample data:
+        </p>
+        <pre className="mt-4 rounded-lg border px-4 py-3 text-left text-sm" style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}>
+          npm run db:seed
+        </pre>
+        <p className="mt-3 text-xs" style={{ color: "var(--text-secondary)" }}>
+          Or set MOCK_MODE=false and run <code>npm run dev:all</code> to pull live eBay data.
+        </p>
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8">
@@ -44,46 +62,7 @@ export default async function Dashboard() {
         />
       </section>
 
-      <section className="mb-10">
-        <h2 className="mb-3 text-lg font-semibold">Deal feed</h2>
-        <div className="overflow-x-auto rounded-xl border" style={{ background: "var(--surface-2)", borderColor: "var(--border)" }}>
-          <table className="w-full min-w-[720px] text-sm">
-            <thead>
-              <tr className="text-left text-xs uppercase tracking-wide" style={{ color: "var(--text-secondary)" }}>
-                <th className="px-4 py-3">Score</th>
-                <th className="px-4 py-3">Card</th>
-                <th className="px-4 py-3">Grade</th>
-                <th className="px-4 py-3 text-right">Ask</th>
-                <th className="px-4 py-3 text-right">Market</th>
-                <th className="px-4 py-3 text-right">Discount</th>
-                <th className="px-4 py-3 text-right">30d trend</th>
-                <th className="px-4 py-3 text-right">Comps</th>
-              </tr>
-            </thead>
-            <tbody>
-              {deals.map((d) => (
-                <tr key={d.listingId} className="border-t" style={{ borderColor: "var(--border)" }}>
-                  <td className="px-4 py-3">
-                    <ScoreBadge score={d.score} label={d.label} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="font-medium">{d.title}</div>
-                    <div className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                      {d.sport} · {d.source}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">{d.grade}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{usd(d.askPrice)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{usd(d.stats.marketValue)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{pct(d.discount)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{pct(d.stats.trend30d)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{d.stats.sampleSize}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      <DealFeed initialDeals={deals} sports={sports} />
 
       <section>
         <h2 className="mb-3 text-lg font-semibold">Tracked cards</h2>
