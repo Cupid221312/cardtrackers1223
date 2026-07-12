@@ -1,0 +1,51 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+// SQLite for zero-dependency local/mock mode. To move to Postgres later,
+// change provider to "postgresql" and update DATABASE_URL — the models are portable.
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Card {
+  id         String    @id @default(cuid())
+  playerName String
+  year       Int
+  setName    String
+  cardNumber String
+  variant    String    @default("Base")
+  sport      String
+  sales      Sale[]
+  listings   Listing[]
+
+  @@unique([playerName, year, setName, cardNumber, variant])
+}
+
+model Sale {
+  id     String   @id @default(cuid())
+  cardId String
+  card   Card     @relation(fields: [cardId], references: [id])
+  grade  String
+  price  Float
+  soldAt DateTime
+  source String   @default("mock")
+
+  @@index([cardId, grade, soldAt])
+}
+
+model Listing {
+  id       String   @id @default(cuid())
+  cardId   String
+  card     Card     @relation(fields: [cardId], references: [id])
+  grade    String
+  askPrice Float
+  title    String
+  listedAt DateTime
+  source   String   @default("mock")
+  url      String   @default("")
+  active   Boolean  @default(true)
+
+  @@index([cardId, grade, active])
+}
