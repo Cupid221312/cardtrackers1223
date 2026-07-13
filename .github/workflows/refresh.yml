@@ -1,0 +1,31 @@
+name: Refresh market data
+
+# GitHub Actions cron replaces the long-lived scheduler on serverless
+# deploys (Vercel + Neon). Fires every 10 minutes. Minimum GitHub allows is
+# 5 minutes; runs on public repos are unlimited on the free tier.
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ping /api/refresh
+        run: |
+          set -euo pipefail
+          # --fail-with-body so a non-2xx HTTP status fails the workflow with
+          # the endpoint's error body in the log, not a silent success.
+          curl -sS --fail-with-body \
+            --max-time 90 \
+            -X POST \
+            -H "Authorization: Bearer ${{ secrets.REFRESH_SECRET }}" \
+            -H "Content-Type: application/json" \
+            "${{ secrets.APP_URL }}/api/refresh"
