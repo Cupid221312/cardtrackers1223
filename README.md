@@ -1,5 +1,14 @@
 # Card Market Intel
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Cupid221312/cardtrackers1223/tree/claude/card-market-intel-setup-cds2yl)
+
+**One-click deploy:** the button above reads `render.yaml` and provisions
+Postgres + web + scheduler with env vars pre-wired. You need a free Render
+account and to authorize GitHub access, nothing else.
+
+---
+
+
 Sports & TCG card market intelligence: track cards, ingest sales comps, and rank
 active listings with a 0–100 **Deal Score**. Runs fully offline in **mock mode**
 (seeded, deterministic data) — no API keys, no Docker, no scrapers needed.
