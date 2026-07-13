@@ -36,6 +36,11 @@ function breakerFor(c: Connector): CircuitBreaker {
   return b;
 }
 
+/** Snapshot of every registered breaker's state — consumed by /api/health. */
+export function getBreakerHealth(): Array<{ source: string; state: string }> {
+  return Array.from(breakers.entries()).map(([source, b]) => ({ source, state: b.status }));
+}
+
 async function callConnector<T>(
   connector: Connector,
   op: (c: Connector) => Promise<T>
