@@ -93,8 +93,9 @@ async function fetchActiveItems(query: string): Promise<ActiveItem[]> {
       maxBytes: 5 * 1024 * 1024,
     });
   } catch (e) {
-    // 404/410/blocked → treat as no results this cycle (per-connector isolation).
-    if (e instanceof HttpError && e.status && e.status >= 400 && e.status < 500) return [];
+    // Only genuine "no such resource" is treated as empty. 403/429/etc. must
+    // propagate so the circuit breaker can trip and stop wasting cycles.
+    if (e instanceof HttpError && (e.status === 404 || e.status === 410)) return [];
     throw e;
   }
   await sleep(delayMs());
@@ -117,8 +118,10 @@ async function fetchActiveItems(query: string): Promise<ActiveItem[]> {
 export const myslabsConnector: Connector = {
   source: "myslabs",
   enabled: process.env.MYSLABS_ENABLED !== "false",
+  supportsSolds: false, // Public pages don't expose sold history.
+  supportsActives: true,
   async fetchSolds(): Promise<SoldItem[]> {
-    return []; // MySlabs public pages don't expose sold history.
+    return [];
   },
   async fetchActives(q: CardQuery) {
     const query = q.overrideQuery

@@ -98,10 +98,28 @@ over the following 30 days. Current seed results:
 
 Spearman rank correlation (score vs realized return): **0.82**.
 
+## Resilience (Step 2)
+
+- **Retry with exponential backoff** (`src/lib/retry.ts`): transient failures
+  (network errors, 5xx, 408, 429) get up to 3 attempts with jittered backoff
+  starting at 800ms. Permanent 4xx failures (403, 404, 401) fail immediately —
+  retrying them is how you get IP-banned.
+- **Per-source circuit breaker** (`src/lib/worker/circuit-breaker.ts`):
+  after 4 consecutive failures a source's circuit opens for 5 minutes;
+  further calls short-circuit without hitting the upstream. After the
+  cooldown the breaker goes half-open and lets one probe through — success
+  closes it, failure re-opens with a fresh cooldown. Breaker state is
+  visible in every refresh log (`ebay[open] myslabs[closed]`).
+- **DB connection pool** (production): the SQLite default is single-writer.
+  For Postgres in production (Step 3), set
+  `DATABASE_URL="postgres://…/db?connection_limit=20&pool_timeout=20"` so
+  Prisma opens a bounded pool. One Prisma client is shared via the
+  `src/lib/db.ts` singleton so serverless invocations reuse connections.
+
 ## Tests
 
 ```bash
-npm test            # 23 unit tests: Deal Score engine + eBay parser
+npm test            # 41 unit tests: engine + parsers + http + retry + breaker
 npm run check:parser  # standalone parser fixture check
 ```
 

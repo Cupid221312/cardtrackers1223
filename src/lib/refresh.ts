@@ -15,12 +15,40 @@
 import { prisma } from "./db";
 import { computeMarketStats } from "./dealScore";
 import { enabledConnectors } from "./connectors";
-import type { CardQuery } from "./connectors";
+import type { CardQuery, Connector } from "./connectors";
+import { CircuitBreaker, CircuitOpenError } from "./worker/circuit-breaker";
+import { withRetry } from "./retry";
 
 const TICK_MINUTES = 10;
 /** Live mode: cards refreshed per 10-minute cycle (politeness rate limit). */
 const CARDS_PER_CYCLE = 4;
 const GRADES = ["PSA 10", "PSA 9"];
+
+// Breakers persist across cycles so a run of failures actually opens the
+// circuit. Keyed by connector.source.
+const breakers = new Map<string, CircuitBreaker>();
+function breakerFor(c: Connector): CircuitBreaker {
+  let b = breakers.get(c.source);
+  if (!b) {
+    b = new CircuitBreaker(c.source, { failureThreshold: 4, cooldownMs: 5 * 60_000 });
+    breakers.set(c.source, b);
+  }
+  return b;
+}
+
+async function callConnector<T>(
+  connector: Connector,
+  op: (c: Connector) => Promise<T>
+): Promise<T> {
+  return breakerFor(connector).exec(() =>
+    withRetry(() => op(connector), {
+      attempts: 3,
+      baseMs: 800,
+      onRetry: (err, i, delay) =>
+        console.warn(`[refresh] ${connector.source} retry ${i + 1} in ${delay}ms: ${err instanceof Error ? err.message : err}`),
+    })
+  );
+}
 
 const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
 
@@ -137,8 +165,9 @@ async function runLiveRefresh(): Promise<string> {
       for (const conn of connectors) {
         const context = `${conn.source} · ${card.playerName} ${grade}`;
         try {
-          // --- sold comps (some sources don't expose them) ---
-          const sold = await conn.fetchSolds(q);
+          // --- sold comps (skip sources that don't expose them; a no-op
+          // "success" would reset the breaker and mask real failures) ---
+          const sold = conn.supportsSolds ? await callConnector(conn, (c) => c.fetchSolds(q)) : [];
           if (sold.length > 0) {
             const existing = new Set(
               (
@@ -165,7 +194,7 @@ async function runLiveRefresh(): Promise<string> {
           }
 
           // --- active listings ---
-          const active = await conn.fetchActives(q);
+          const active = conn.supportsActives ? await callConnector(conn, (c) => c.fetchActives(q)) : [];
           for (const a of active) {
             await prisma.listing.upsert({
               where: { externalId: a.externalId },
@@ -201,9 +230,8 @@ async function runLiveRefresh(): Promise<string> {
             delisted += gone.count;
           }
         } catch (e) {
-          if (problems.length < 20) {
-            problems.push(`${context}: ${e instanceof Error ? e.message : e}`);
-          }
+          const msg = e instanceof CircuitOpenError ? "circuit open (skipped)" : e instanceof Error ? e.message : String(e);
+          if (problems.length < 20) problems.push(`${context}: ${msg}`);
         }
       }
     }
@@ -211,7 +239,9 @@ async function runLiveRefresh(): Promise<string> {
     await prisma.card.update({ where: { id: card.id }, data: { lastFetchedAt: now } });
   }
 
-  const sources = connectors.map((c) => c.source).join("+") || "none";
-  const summary = `${now.toISOString()} LIVE refresh (${cards.length} cards, sources=${sources}): +${newSales} sales, ${upsertedListings} listings upserted, ${delisted} delisted`;
+  const sources = connectors
+    .map((c) => `${c.source}[${breakerFor(c).status}]`)
+    .join(" ");
+  const summary = `${now.toISOString()} LIVE refresh (${cards.length} cards, ${sources}): +${newSales} sales, ${upsertedListings} listings upserted, ${delisted} delisted`;
   return problems.length ? `${summary}\n  issues: ${problems.join(" | ")}` : summary;
 }

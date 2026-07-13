@@ -39,6 +39,14 @@ export interface Connector {
   readonly source: string;
   /** Whether the connector is turned on (env-flag driven). */
   readonly enabled: boolean;
+  /**
+   * Whether the source actually exposes sold-comp history. Sources that don't
+   * (e.g. MySlabs) must NOT be called at all — a no-op empty return would
+   * be counted as a success by the circuit breaker and mask real failures
+   * from other operations on the same source.
+   */
+  readonly supportsSolds: boolean;
+  readonly supportsActives: boolean;
   fetchSolds(q: CardQuery): Promise<SoldItem[]>;
   fetchActives(q: CardQuery): Promise<ActiveItem[]>;
 }

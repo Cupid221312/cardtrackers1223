@@ -197,6 +197,8 @@ function buildQuery(q: CardQuery): string {
 export const ebayConnector: Connector = {
   source: "ebay",
   enabled: true,
+  supportsSolds: true,
+  supportsActives: true,
   async fetchSolds(q) {
     return (await fetchSoldItems(buildQuery(q))).filter((s) => matchesCard(s.title, q.playerName, q.grade));
   },
