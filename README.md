@@ -26,6 +26,21 @@ recomputed from the latest data on every page load.
 
 - `npm run refresh` — run a single update cycle by hand
 - `npm run scheduler` — just the 10-minute updater (if you run `npm run dev` separately)
+## Data sources
+
+Each marketplace is a **Connector** (`src/lib/connectors/types.ts`) — every
+source runs through the same hardened HTTP layer (timeout + response size
+cap) and gets the same per-cycle error isolation, so a slow or blocked
+source can't take down the worker.
+
+| Source | Sold comps | Active listings | Env flag |
+|---|---|---|---|
+| eBay (public search) | ✅ | ✅ | on by default |
+| MySlabs | — | ✅ | `MYSLABS_ENABLED=false` to disable |
+
+Adding another source is a single module implementing the `Connector`
+interface plus one line in `src/lib/connectors/index.ts`.
+
 ## Real eBay data (no API key needed)
 
 Set `MOCK_MODE=false` in `.env` and restart `npm run dev:all`. Each 10-minute

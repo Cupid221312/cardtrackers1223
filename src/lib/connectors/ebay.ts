@@ -13,6 +13,8 @@
 import * as cheerio from "cheerio";
 import fs from "fs";
 import path from "path";
+import { fetchText } from "../http";
+import type { CardQuery, Connector } from "./types";
 
 export interface EbaySoldItem {
   externalId: string;
@@ -38,16 +40,17 @@ export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function fetchSearchPage(params: Record<string, string>): Promise<string> {
   const url = new URL("https://www.ebay.com/sch/i.html");
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
-  const res = await fetch(url, {
+  const html = await fetchText(url, {
     headers: {
       "User-Agent": UA,
       "Accept": "text/html,application/xhtml+xml",
       "Accept-Language": "en-US,en;q=0.9",
     },
+    timeoutMs: Number(process.env.EBAY_TIMEOUT_MS ?? 15_000),
+    maxBytes: 5 * 1024 * 1024,
   });
-  if (!res.ok) throw new Error(`eBay responded ${res.status} for ${url}`);
   await sleep(delayMs());
-  return res.text();
+  return html;
 }
 
 export function parsePrice(text: string): number | null {
@@ -184,6 +187,23 @@ export async function fetchActiveItems(query: string): Promise<EbayActiveItem[]>
   }
   return out;
 }
+
+function buildQuery(q: CardQuery): string {
+  if (q.overrideQuery) return `${q.overrideQuery} ${q.grade}`;
+  const variant = q.variant && q.variant !== "Base" ? ` ${q.variant}` : "";
+  return `${q.year} ${q.setName} ${q.playerName} ${q.cardNumber}${variant} ${q.grade}`;
+}
+
+export const ebayConnector: Connector = {
+  source: "ebay",
+  enabled: true,
+  async fetchSolds(q) {
+    return (await fetchSoldItems(buildQuery(q))).filter((s) => matchesCard(s.title, q.playerName, q.grade));
+  },
+  async fetchActives(q) {
+    return (await fetchActiveItems(buildQuery(q))).filter((a) => matchesCard(a.title, q.playerName, q.grade));
+  },
+};
 
 /** Title must mention the grade and the player's last name to count as a comp. */
 export function matchesCard(title: string, playerName: string, grade: string): boolean {

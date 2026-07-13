@@ -14,7 +14,8 @@
  */
 import { prisma } from "./db";
 import { computeMarketStats } from "./dealScore";
-import { fetchActiveItems, fetchSoldItems, matchesCard } from "./connectors/ebay";
+import { enabledConnectors } from "./connectors";
+import type { CardQuery } from "./connectors";
 
 const TICK_MINUTES = 10;
 /** Live mode: cards refreshed per 10-minute cycle (politeness rate limit). */
@@ -119,84 +120,98 @@ async function runLiveRefresh(): Promise<string> {
   let delisted = 0;
   const problems: string[] = [];
 
-  for (const card of cards) {
-    const baseQuery =
-      card.searchQuery ??
-      `${card.year} ${card.setName} ${card.playerName} ${card.cardNumber}${card.variant !== "Base" ? ` ${card.variant}` : ""}`;
+  const connectors = enabledConnectors();
 
+  for (const card of cards) {
     for (const grade of GRADES) {
-      const query = `${baseQuery} ${grade}`;
-      try {
-        // --- sold comps ---
-        const sold = (await fetchSoldItems(query)).filter((s) => matchesCard(s.title, card.playerName, grade));
-        if (sold.length > 0) {
-          const existing = new Set(
-            (
-              await prisma.sale.findMany({
-                where: { externalId: { in: sold.map((s) => s.externalId) } },
-                select: { externalId: true },
-              })
-            ).map((s) => s.externalId)
-          );
-          for (const s of sold) {
-            if (existing.has(s.externalId)) continue;
-            await prisma.sale.create({
-              data: {
+      const q: CardQuery = {
+        playerName: card.playerName,
+        year: card.year,
+        setName: card.setName,
+        cardNumber: card.cardNumber,
+        variant: card.variant,
+        grade,
+        overrideQuery: card.searchQuery ?? undefined,
+      };
+
+      for (const conn of connectors) {
+        const context = `${conn.source} · ${card.playerName} ${grade}`;
+        try {
+          // --- sold comps (some sources don't expose them) ---
+          const sold = await conn.fetchSolds(q);
+          if (sold.length > 0) {
+            const existing = new Set(
+              (
+                await prisma.sale.findMany({
+                  where: { externalId: { in: sold.map((s) => s.externalId) } },
+                  select: { externalId: true },
+                })
+              ).map((s) => s.externalId)
+            );
+            for (const s of sold) {
+              if (existing.has(s.externalId)) continue;
+              await prisma.sale.create({
+                data: {
+                  cardId: card.id,
+                  grade,
+                  price: s.price,
+                  soldAt: s.soldAt,
+                  source: conn.source,
+                  externalId: s.externalId,
+                },
+              });
+              newSales++;
+            }
+          }
+
+          // --- active listings ---
+          const active = await conn.fetchActives(q);
+          for (const a of active) {
+            await prisma.listing.upsert({
+              where: { externalId: a.externalId },
+              update: { askPrice: a.price, active: true },
+              create: {
                 cardId: card.id,
                 grade,
-                price: s.price,
-                soldAt: s.soldAt,
-                source: "ebay",
-                externalId: s.externalId,
+                askPrice: a.price,
+                title: a.title,
+                listedAt: now,
+                source: conn.source,
+                url: a.url,
+                externalId: a.externalId,
+                active: true,
               },
             });
-            newSales++;
+            upsertedListings++;
+          }
+          // Listings from THIS source for this card/grade that vanished from
+          // search results are gone (sold or ended) — retire them. Scoped by
+          // source so one connector's outage doesn't wipe another's listings.
+          if (active.length > 0) {
+            const gone = await prisma.listing.updateMany({
+              where: {
+                cardId: card.id,
+                grade,
+                source: conn.source,
+                active: true,
+                externalId: { notIn: active.map((a) => a.externalId) },
+              },
+              data: { active: false },
+            });
+            delisted += gone.count;
+          }
+        } catch (e) {
+          if (problems.length < 20) {
+            problems.push(`${context}: ${e instanceof Error ? e.message : e}`);
           }
         }
-
-        // --- active listings ---
-        const active = (await fetchActiveItems(query)).filter((a) => matchesCard(a.title, card.playerName, grade));
-        for (const a of active) {
-          await prisma.listing.upsert({
-            where: { externalId: a.externalId },
-            update: { askPrice: a.price, active: true },
-            create: {
-              cardId: card.id,
-              grade,
-              askPrice: a.price,
-              title: a.title,
-              listedAt: now,
-              source: "ebay",
-              url: a.url,
-              externalId: a.externalId,
-              active: true,
-            },
-          });
-          upsertedListings++;
-        }
-        // eBay listings for this card/grade that vanished from search results
-        // are gone (sold or ended) — retire them.
-        if (active.length > 0) {
-          const gone = await prisma.listing.updateMany({
-            where: {
-              cardId: card.id,
-              grade,
-              source: "ebay",
-              active: true,
-              externalId: { notIn: active.map((a) => a.externalId) },
-            },
-            data: { active: false },
-          });
-          delisted += gone.count;
-        }
-      } catch (e) {
-        problems.push(`${query}: ${e instanceof Error ? e.message : e}`);
       }
     }
 
     await prisma.card.update({ where: { id: card.id }, data: { lastFetchedAt: now } });
   }
 
-  const summary = `${now.toISOString()} LIVE refresh (${cards.length} cards): +${newSales} sales, ${upsertedListings} listings upserted, ${delisted} delisted`;
+  const sources = connectors.map((c) => c.source).join("+") || "none";
+  const summary = `${now.toISOString()} LIVE refresh (${cards.length} cards, sources=${sources}): +${newSales} sales, ${upsertedListings} listings upserted, ${delisted} delisted`;
   return problems.length ? `${summary}\n  issues: ${problems.join(" | ")}` : summary;
 }
