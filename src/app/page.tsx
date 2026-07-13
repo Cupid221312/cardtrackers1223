@@ -41,14 +41,23 @@ export default async function Dashboard() {
           </p>
           <AutoRefresh lastSaleAt={overview.lastSaleAt} />
         </div>
-        {overview.mockMode && (
-          <span
+        <div className="flex items-center gap-3">
+          {overview.mockMode && (
+            <span
+              className="rounded-full border px-3 py-1 text-xs font-medium"
+              style={{ borderColor: "var(--border)", color: "var(--text-secondary)" }}
+            >
+              MOCK MODE — seeded data, no live scraping
+            </span>
+          )}
+          <a
+            href="/manage"
             className="rounded-full border px-3 py-1 text-xs font-medium"
             style={{ borderColor: "var(--border)", color: "var(--text-secondary)" }}
           >
-            MOCK MODE — seeded data, no live scraping
-          </span>
-        )}
+            Manage cards →
+          </a>
+        </div>
       </header>
 
       <section className="mb-10 grid grid-cols-2 gap-4 md:grid-cols-4">
