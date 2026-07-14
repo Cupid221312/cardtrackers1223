@@ -1,5 +1,6 @@
 "use client";
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Personal admin page — add or remove tracked cards from any browser.
  *
@@ -152,6 +153,8 @@ export default function ManagePage() {
         <a href="/" className="text-sm underline" style={{ color: "var(--series-1)" }}>← Back to dashboard</a>
       </header>
 
+      <BulkAdd secret={savedSecret} onDone={() => void loadCards()} />
+
       <section
         className="mb-8 rounded-xl border p-4"
         style={{ background: "var(--surface-2)", borderColor: "var(--border)" }}
@@ -258,5 +261,110 @@ export default function ManagePage() {
         </div>
       </section>
     </main>
+  );
+}
+
+function BulkAdd({ secret, onDone }: { secret: string; onDone: () => void }) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ parsed: number; added: number; duplicates: number; failed: any[] } | null>(null);
+
+  async function handleFile(f: File) {
+    setText(await f.text());
+  }
+
+  async function submit() {
+    if (!text.trim()) return;
+    setBusy(true);
+    setResult(null);
+    const res = await fetch(`/api/cards/bulk?secret=${encodeURIComponent(secret)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    const j = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (!res.ok) {
+      setResult({ parsed: 0, added: 0, duplicates: 0, failed: [{ input: "", reason: j.error ?? "Request failed" }] });
+      return;
+    }
+    setResult(j);
+    if (j.added > 0) onDone();
+  }
+
+  return (
+    <section
+      className="mb-8 rounded-xl border p-4"
+      style={{ background: "var(--surface-2)", borderColor: "var(--border)" }}
+    >
+      <h2 className="mb-1 font-semibold">Bulk add — paste a list or upload a file</h2>
+      <p className="mb-3 text-xs" style={{ color: "var(--text-secondary)" }}>
+        Any of these formats auto-detect: CSV with headers, Excel copy-paste (tab-separated),
+        pipe-delimited (<code>2023 | Prizm | Wembanyama | 136 | Base | Basketball</code>),
+        or free-form (<code>2023 Prizm Victor Wembanyama #136 Basketball</code>) — one card per line.
+      </p>
+
+      <textarea
+        rows={6}
+        placeholder={`2023 Prizm Victor Wembanyama #136 Basketball\n2017 Prizm Patrick Mahomes #269 Football\n1999 Pokemon Base Set Charizard #4 Holo Unlimited`}
+        className="w-full rounded border px-3 py-2 font-mono text-xs"
+        style={{ background: "var(--surface-1)", borderColor: "var(--border)", color: "var(--text-primary)" }}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+      />
+
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <label
+          className="cursor-pointer rounded border px-3 py-2 text-xs"
+          style={{ borderColor: "var(--border)", color: "var(--text-secondary)" }}
+        >
+          Upload .csv / .txt
+          <input
+            type="file"
+            accept=".csv,.txt,.tsv,text/plain"
+            className="hidden"
+            onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+          />
+        </label>
+        <button
+          onClick={submit}
+          disabled={busy || !text.trim()}
+          className="rounded px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          style={{ background: "var(--series-1)" }}
+        >
+          {busy ? "Adding…" : "Add all"}
+        </button>
+        {text && (
+          <button
+            onClick={() => { setText(""); setResult(null); }}
+            className="text-xs underline"
+            style={{ color: "var(--text-secondary)" }}
+          >Clear</button>
+        )}
+      </div>
+
+      {result && (
+        <div className="mt-4 rounded border p-3 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface-1)" }}>
+          <div>
+            <strong style={{ color: "var(--status-good)" }}>{result.added} added</strong>
+            {result.duplicates > 0 && <> · {result.duplicates} already tracked</>}
+            {result.failed.length > 0 && <> · <span style={{ color: "var(--status-serious)" }}>{result.failed.length} failed</span></>}
+          </div>
+          {result.failed.length > 0 && (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-xs" style={{ color: "var(--text-secondary)" }}>Show failures</summary>
+              <ul className="mt-2 space-y-1 text-xs">
+                {result.failed.map((f, i) => (
+                  <li key={i}>
+                    <code style={{ color: "var(--text-secondary)" }}>{f.input}</code>
+                    <span style={{ color: "var(--status-serious)" }}> — {f.reason}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      )}
+    </section>
   );
 }
