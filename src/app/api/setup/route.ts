@@ -9,6 +9,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { seedDatabase } from "@/lib/seed";
+import { ensureSchema } from "@/lib/schema-init";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -33,13 +34,18 @@ async function handle(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const started = Date.now();
+  const seed = req.nextUrl.searchParams.get("seed") !== "false";
   try {
-    const counts = await seedDatabase();
+    await ensureSchema();
+    const counts = seed ? await seedDatabase() : { cards: 0, sales: 0, listings: 0 };
     return NextResponse.json({
       ok: true,
       ms: Date.now() - started,
-      seeded: counts,
-      message: "Database ready. Visit the dashboard.",
+      schemaReady: true,
+      seeded: seed ? counts : "skipped (pass ?seed=false to skip)",
+      message: seed
+        ? "Database ready with sample cards. Visit the dashboard, or /manage to swap in your own."
+        : "Database schema ready. Head to /manage to add cards.",
     });
   } catch (e) {
     return NextResponse.json(
