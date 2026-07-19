@@ -1,0 +1,266 @@
+//@version=5
+// ─────────────────────────────────────────────────────────────────────────────
+// CONFLUENCE SCALPER — SPX500 / NAS100, 1-minute
+// Synthesis of three methodologies (see trading/PHASE1_STRATEGY_DECOMPOSITION.md):
+//   • PATs (Mack)        → second-entry pullback trigger, signal-bar stop, max-risk cap
+//   • TradingLab         → 200 EMA + 13/21/34/55 ribbon bias, order-block entry zones
+//   • Warrior (Cameron)  → 9/20 EMA + VWAP + MACD regime gates, micro-pullback trigger,
+//                          "stop trading" discipline → daily circuit breaker
+// Educational tool. Backtest results on 1m data overstate live performance
+// (spread, slippage, fill assumptions). Paper trade first. Not financial advice.
+// ─────────────────────────────────────────────────────────────────────────────
+strategy("Confluence Scalper 1m (PATs × TradingLab × Warrior)",
+     shorttitle    = "CS-1m",
+     overlay       = true,
+     initial_capital = 10000,
+     currency      = currency.USD,
+     slippage      = 1,
+     pyramiding    = 0,
+     max_labels_count = 500,
+     calc_on_every_tick = false)
+
+// ── INPUTS ───────────────────────────────────────────────────────────────────
+grpS  = "Session & Direction"
+sessInput      = input.session("0931-1550", "Trading session (America/New_York)", group=grpS)
+allowLongs     = input.bool(true,  "Allow longs",  group=grpS)
+allowShorts    = input.bool(true,  "Allow shorts", group=grpS)
+
+grpB  = "Bias & Regime filters"
+useRibbon      = input.bool(true,  "Require 13/21/34/55 EMA ribbon stacked (TradingLab)", group=grpB)
+use200         = input.bool(true,  "Require price vs 200 EMA (TradingLab)",               group=grpB)
+useVwap        = input.bool(true,  "Require price vs session VWAP (Warrior)",             group=grpB)
+useMacd        = input.bool(true,  "Require MACD regime (Warrior)",                       group=grpB)
+useHtf         = input.bool(true,  "Require higher-timeframe EMA bias",                   group=grpB)
+htfTf          = input.timeframe("5", "Higher timeframe for bias", group=grpB)
+
+grpE  = "Entry (second-entry micro pullback)"
+minPB          = input.int(2, "Min pullback bars (2 ≈ Mack's second entry)", minval=1, maxval=5, group=grpE)
+maxPB          = input.int(4, "Max pullback bars (shallow only — Warrior)",  minval=1, maxval=8, group=grpE)
+entryBufTicks  = input.int(1, "Entry stop-order buffer (ticks beyond signal bar)", minval=0, group=grpE)
+zoneAtrMult    = input.float(0.25, "EMA-zone tolerance (× ATR around 20 EMA)", step=0.05, group=grpE)
+useOB          = input.bool(false, "Also require pullback into an order block (stricter)", group=grpE)
+obDispAtr      = input.float(1.5,  "Order block: displacement body ≥ × ATR", step=0.1, group=grpE)
+bosLen         = input.int(10, "Order block: breakout lookback (bars)", minval=5, group=grpE)
+
+grpR  = "Risk — stops & targets"
+slMode         = input.string("Swing", "Stop-loss mode", options=["Swing", "ATR", "Percent"], group=grpR)
+swingLen       = input.int(5,     "Swing lookback (bars)",            minval=2,  group=grpR)
+slAtrMult      = input.float(1.5, "ATR stop multiplier",              step=0.1,  group=grpR)
+slPct          = input.float(0.15,"Percent stop (%)",                 step=0.05, group=grpR)
+slBufTicks     = input.int(2,     "Stop buffer (ticks beyond level — Mack)", minval=0, group=grpR)
+maxRiskAtr     = input.float(2.0, "Max risk cap (× ATR) — skip wider setups (Mack's 2-pt rule)", step=0.25, group=grpR)
+rrMult         = input.float(1.5, "Take profit (R multiple)",         step=0.25, group=grpR)
+useBE          = input.bool(true, "Move stop to breakeven at +1R",    group=grpR)
+macdFlipExit   = input.bool(true, "Exit on MACD cross against position (Warrior)", group=grpR)
+
+grpA  = "Account risk"
+riskPct        = input.float(1.0, "Risk per trade (% of equity)", step=0.25, minval=0.1, group=grpA)
+maxDailyLoss   = input.float(3.0, "Daily circuit breaker (% equity loss → halt)", step=0.5, group=grpA)
+
+// ── CORE SERIES (global scope, as Pine requires) ─────────────────────────────
+atrVal   = ta.atr(14)
+ema9     = ta.ema(close, 9)
+ema20    = ta.ema(close, 20)
+ema13    = ta.ema(close, 13)
+ema21    = ta.ema(close, 21)
+ema34    = ta.ema(close, 34)
+ema55    = ta.ema(close, 55)
+ema200   = ta.ema(close, 200)
+vwapVal  = ta.vwap(hlc3)
+[macdLine, sigLine, _h] = ta.macd(close, 12, 26, 9)
+
+// Non-repainting HTF bias: last CONFIRMED higher-timeframe bar
+htfBullRaw = request.security(syminfo.tickerid, htfTf,
+     ta.ema(close, 9)[1] > ta.ema(close, 20)[1], lookahead=barmerge.lookahead_on)
+htfBearRaw = request.security(syminfo.tickerid, htfTf,
+     ta.ema(close, 9)[1] < ta.ema(close, 20)[1], lookahead=barmerge.lookahead_on)
+
+inSession = not na(time(timeframe.period, sessInput, "America/New_York"))
+
+// ── DAILY CIRCUIT BREAKER ────────────────────────────────────────────────────
+dom = dayofmonth(time, "America/New_York")
+newDay = dom != dom[1]
+var float dayStartEq = na
+var bool  halted     = false
+if newDay or na(dayStartEq)
+    dayStartEq := strategy.equity
+    halted     := false
+dayLossPct = dayStartEq > 0 ? (dayStartEq - strategy.equity) / dayStartEq * 100 : 0.0
+if not halted and dayLossPct >= maxDailyLoss
+    halted := true
+    strategy.cancel_all()
+    strategy.close_all(comment="CIRCUIT BREAKER")
+
+canTrade = inSession and not halted
+
+// ── REGIME GATES ─────────────────────────────────────────────────────────────
+ribbonBull = ema13 > ema21 and ema21 > ema34 and ema34 > ema55
+ribbonBear = ema13 < ema21 and ema21 < ema34 and ema34 < ema55
+
+bullRegime = ema9 > ema20 and
+     (not useRibbon or ribbonBull) and
+     (not use200   or close > ema200) and
+     (not useVwap  or close > vwapVal) and
+     (not useMacd  or macdLine > sigLine) and
+     (not useHtf   or htfBullRaw)
+
+bearRegime = ema9 < ema20 and
+     (not useRibbon or ribbonBear) and
+     (not use200   or close < ema200) and
+     (not useVwap  or close < vwapVal) and
+     (not useMacd  or macdLine < sigLine) and
+     (not useHtf   or htfBearRaw)
+
+// ── ORDER BLOCKS (optional stricter location filter) ─────────────────────────
+// Bullish OB = last down candle before an impulsive body that breaks recent highs.
+f_lastOpposite(bullish) =>
+    top = float(na)
+    bot = float(na)
+    for i = 1 to 6
+        opp = bullish ? close[i] < open[i] : close[i] > open[i]
+        if opp
+            top := high[i]
+            bot := low[i]
+            break
+    [top, bot]
+
+bullDisplacement = close > open and (close - open) >= obDispAtr * atrVal and close > ta.highest(high, bosLen)[1]
+bearDisplacement = close < open and (open - close) >= obDispAtr * atrVal and close < ta.lowest(low, bosLen)[1]
+
+var float obTopL = na
+var float obBotL = na
+var float obTopS = na
+var float obBotS = na
+if bullDisplacement
+    [t, b] = f_lastOpposite(true)
+    obTopL := t
+    obBotL := b
+if bearDisplacement
+    [t, b] = f_lastOpposite(false)
+    obTopS := t
+    obBotS := b
+// Mitigation: a close through the block kills it
+if not na(obBotL) and close < obBotL
+    obTopL := na
+    obBotL := na
+if not na(obTopS) and close > obTopS
+    obTopS := na
+    obBotS := na
+
+// ── PULLBACK DETECTION (micro pullback / second entry) ───────────────────────
+var int pbL = 0
+var int pbS = 0
+pbL := bullRegime ? (close < close[1] ? pbL + 1 : (high > high[1] ? 0 : pbL)) : 0
+pbS := bearRegime ? (close > close[1] ? pbS + 1 : (low  < low[1]  ? 0 : pbS)) : 0
+
+// Location: pullback must reach the 9 EMA or the 20 EMA ± tolerance (never mid-air)
+zoneL = low  <= ema9 or math.abs(low  - ema20) <= zoneAtrMult * atrVal
+zoneS = high >= ema9 or math.abs(high - ema20) <= zoneAtrMult * atrVal
+obZoneL = not useOB or (not na(obTopL) and low  <= obTopL and high >= obBotL)
+obZoneS = not useOB or (not na(obBotS) and high >= obBotS and low  <= obTopS)
+
+setupL = canTrade and allowLongs  and strategy.position_size == 0 and bullRegime and pbL >= minPB and pbL <= maxPB and zoneL and obZoneL
+setupS = canTrade and allowShorts and strategy.position_size == 0 and bearRegime and pbS >= minPB and pbS <= maxPB and zoneS and obZoneS
+
+// ── STOP / TARGET / SIZE (computed at arming time; Mack's max-risk cap) ──────
+tick = syminfo.mintick
+entryPxL = high + entryBufTicks * tick
+entryPxS = low  - entryBufTicks * tick
+
+slSwingL = ta.lowest(low,  swingLen) - slBufTicks * tick
+slSwingS = ta.highest(high, swingLen) + slBufTicks * tick
+slRawL = slMode == "Swing" ? slSwingL : slMode == "ATR" ? entryPxL - slAtrMult * atrVal : entryPxL * (1 - slPct / 100)
+slRawS = slMode == "Swing" ? slSwingS : slMode == "ATR" ? entryPxS + slAtrMult * atrVal : entryPxS * (1 + slPct / 100)
+
+riskL = entryPxL - slRawL
+riskS = slRawS - entryPxS
+riskOkL = riskL > 0 and riskL <= maxRiskAtr * atrVal
+riskOkS = riskS > 0 and riskS <= maxRiskAtr * atrVal
+
+f_qty(riskPts) =>
+    rd = strategy.equity * riskPct / 100
+    q  = rd / (riskPts * syminfo.pointvalue)
+    math.max(math.round(q * 100) / 100, 0)
+
+var float pendSlL = na
+var float pendSlS = na
+
+// ── ORDER PLACEMENT: stop orders beyond the signal bar (PATs style) ──────────
+if setupL and riskOkL
+    pendSlL := slRawL
+    strategy.entry("L", strategy.long, qty=f_qty(riskL), stop=entryPxL,
+         alert_message='{"event":"BUY ENTRY","symbol":"' + syminfo.ticker + '"}')
+else if strategy.position_size == 0
+    strategy.cancel("L")
+
+if setupS and riskOkS
+    pendSlS := slRawS
+    strategy.entry("S", strategy.short, qty=f_qty(riskS), stop=entryPxS,
+         alert_message='{"event":"SELL ENTRY","symbol":"' + syminfo.ticker + '"}')
+else if strategy.position_size == 0
+    strategy.cancel("S")
+
+// ── POSITION MANAGEMENT ──────────────────────────────────────────────────────
+var float liveSl = na
+var float liveTp = na
+var float liveRisk = na
+
+justLong  = strategy.position_size > 0 and strategy.position_size[1] <= 0
+justShort = strategy.position_size < 0 and strategy.position_size[1] >= 0
+if justLong
+    liveRisk := strategy.position_avg_price - pendSlL
+    liveSl   := pendSlL
+    liveTp   := strategy.position_avg_price + rrMult * liveRisk
+if justShort
+    liveRisk := pendSlS - strategy.position_avg_price
+    liveSl   := pendSlS
+    liveTp   := strategy.position_avg_price - rrMult * liveRisk
+
+// Breakeven move at +1R
+if useBE and strategy.position_size > 0 and high >= strategy.position_avg_price + liveRisk
+    liveSl := math.max(liveSl, strategy.position_avg_price + tick)
+if useBE and strategy.position_size < 0 and low <= strategy.position_avg_price - liveRisk
+    liveSl := math.min(liveSl, strategy.position_avg_price - tick)
+
+if strategy.position_size > 0
+    strategy.exit("XL", from_entry="L", stop=liveSl, limit=liveTp,
+         alert_message='{"event":"EXIT LONG","symbol":"' + syminfo.ticker + '"}')
+if strategy.position_size < 0
+    strategy.exit("XS", from_entry="S", stop=liveSl, limit=liveTp,
+         alert_message='{"event":"EXIT SHORT","symbol":"' + syminfo.ticker + '"}')
+
+// Warrior regime-flip exit: MACD crossing against the position ends the trade
+if macdFlipExit and strategy.position_size > 0 and ta.crossunder(macdLine, sigLine)
+    strategy.close("L", comment="EXIT LONG (MACD flip)")
+if macdFlipExit and strategy.position_size < 0 and ta.crossover(macdLine, sigLine)
+    strategy.close("S", comment="EXIT SHORT (MACD flip)")
+
+// Flatten outside the session — no overnight 1m exposure
+if not inSession
+    strategy.cancel_all()
+    if strategy.position_size != 0
+        strategy.close_all(comment="SESSION END")
+
+// ── VISUALS ──────────────────────────────────────────────────────────────────
+plot(ema9,   "EMA 9",   color=color.new(color.aqua,   0), linewidth=1)
+plot(ema20,  "EMA 20",  color=color.new(color.orange, 0), linewidth=1)
+plot(ema200, "EMA 200", color=color.new(color.gray,   0), linewidth=2)
+plot(useVwap ? vwapVal : na, "VWAP", color=color.new(color.purple, 0), linewidth=2)
+r1 = plot(ema13, "Ribbon top", color=color.new(color.teal, 80))
+r2 = plot(ema55, "Ribbon base", color=color.new(color.teal, 80))
+fill(r1, r2, color=ribbonBull ? color.new(color.green, 88) : ribbonBear ? color.new(color.red, 88) : color.new(color.gray, 94))
+bgcolor(halted ? color.new(color.red, 85) : na, title="Circuit breaker active")
+
+if justLong
+    label.new(bar_index, low,  "BUY ENTRY",  style=label.style_label_up,   color=color.new(color.green, 0), textcolor=color.white, size=size.small)
+if justShort
+    label.new(bar_index, high, "SELL ENTRY", style=label.style_label_down, color=color.new(color.red,   0), textcolor=color.white, size=size.small)
+exitLong  = strategy.position_size == 0 and strategy.position_size[1] > 0
+exitShort = strategy.position_size == 0 and strategy.position_size[1] < 0
+if exitLong
+    label.new(bar_index, high, "EXIT LONG",  style=label.style_label_down, color=color.new(color.blue,   0), textcolor=color.white, size=size.small)
+if exitShort
+    label.new(bar_index, low,  "EXIT SHORT", style=label.style_label_up,   color=color.new(color.maroon, 0), textcolor=color.white, size=size.small)
+
+plot(strategy.position_size != 0 ? liveSl : na, "Active SL", color=color.red,   style=plot.style_linebr, linewidth=1)
+plot(strategy.position_size != 0 ? liveTp : na, "Active TP", color=color.green, style=plot.style_linebr, linewidth=1)
