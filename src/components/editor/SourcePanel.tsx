@@ -1,11 +1,16 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { clearEditHistory, useEditorStore } from "@/lib/store/editorStore";
 import TranscriptPanel from "@/components/editor/TranscriptPanel";
 import { findClips } from "@/services/ai/clipFinder";
 import { formatTime } from "@/lib/time";
-import type { ClipCandidate, SourceMedia, Transcript } from "@/lib/types";
+import type {
+  ClipCandidate,
+  SavedProjectSummary,
+  SourceMedia,
+  Transcript,
+} from "@/lib/types";
 import clsx from "clsx";
 
 async function readJsonOrThrow(res: Response) {
@@ -29,7 +34,15 @@ export default function SourcePanel() {
   const selectedClipId = useEditorStore((s) => s.selectedClipId);
 
   const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [recent, setRecent] = useState<SavedProjectSummary[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    fetch("/api/projects")
+      .then((res) => (res.ok ? res.json() : { projects: [] }))
+      .then((body) => setRecent(body.projects ?? []))
+      .catch(() => undefined);
+  }, []);
 
   // ---- ingestion ----------------------------------------------------------
 
@@ -91,6 +104,54 @@ export default function SourcePanel() {
         err instanceof Error ? err.message : "YouTube import failed",
       );
     }
+  }
+
+  async function handleDemo() {
+    const s = store.getState();
+    s.setIngesting(true);
+    try {
+      const body = await readJsonOrThrow(
+        await fetch("/api/demo", { method: "POST" }),
+      );
+      const media: SourceMedia = {
+        mediaId: body.mediaId,
+        previewUrl: `/api/media/${body.mediaId}`,
+        name: body.title,
+        duration: body.duration,
+        width: body.width,
+        height: body.height,
+        origin: "upload",
+      };
+      s.setSource(media);
+      clearEditHistory();
+      s.setIngesting(false);
+      void transcribe(media);
+    } catch (err) {
+      s.setIngesting(false, err instanceof Error ? err.message : "Demo failed");
+    }
+  }
+
+  async function openProject(mediaId: string) {
+    const s = store.getState();
+    s.setIngesting(true);
+    try {
+      const body = await readJsonOrThrow(await fetch(`/api/projects/${mediaId}`));
+      s.restoreProject(body.project);
+      clearEditHistory();
+      s.setIngesting(false);
+    } catch (err) {
+      s.setIngesting(
+        false,
+        err instanceof Error ? err.message : "Could not open project",
+      );
+    }
+  }
+
+  async function removeProject(mediaId: string) {
+    setRecent((r) => r.filter((p) => p.mediaId !== mediaId));
+    await fetch(`/api/projects/${mediaId}`, { method: "DELETE" }).catch(
+      () => undefined,
+    );
   }
 
   // ---- transcription + clip detection -------------------------------------
@@ -191,6 +252,15 @@ export default function SourcePanel() {
             e.target.value = "";
           }}
         />
+        {!source && (
+          <button
+            className="mt-2 w-full rounded-lg border border-accent/30 bg-accent/5 px-3 py-1.5 text-xs font-medium text-accent-glow transition hover:bg-accent/15 disabled:opacity-40"
+            onClick={handleDemo}
+            disabled={busy}
+          >
+            ▶ Try with generated demo footage
+          </button>
+        )}
         {ingestError && (
           <p className="mt-2 rounded-lg border border-brand-red/30 bg-brand-red/10 px-2.5 py-1.5 text-xs text-brand-red">
             {ingestError}
@@ -203,6 +273,47 @@ export default function SourcePanel() {
               {formatTime(source.duration)} · {source.width}×{source.height} ·{" "}
               {source.origin === "youtube" ? "YouTube" : "Upload"}
             </p>
+          </div>
+        )}
+        {recent.length > 0 && (
+          <div className="mt-2.5 border-t border-ink-700 pt-2">
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              Recent projects
+            </p>
+            <div className="flex flex-col gap-1">
+              {recent.map((p) => (
+                <div
+                  key={p.mediaId}
+                  className={clsx(
+                    "group flex items-center gap-2 rounded-lg border px-2 py-1.5 text-left transition",
+                    source?.mediaId === p.mediaId
+                      ? "border-accent/50 bg-accent/10"
+                      : "border-ink-700 bg-ink-900 hover:border-ink-500",
+                  )}
+                >
+                  <button
+                    className="min-w-0 flex-1 text-left"
+                    onClick={() => openProject(p.mediaId)}
+                    disabled={busy}
+                  >
+                    <p className="truncate text-[11px] font-medium text-slate-200">
+                      {p.name}
+                    </p>
+                    <p className="text-[10px] text-slate-500">
+                      {formatTime(p.duration)} · {p.clipCount} clip
+                      {p.clipCount === 1 ? "" : "s"}
+                    </p>
+                  </button>
+                  <button
+                    className="hidden shrink-0 text-slate-600 hover:text-brand-red group-hover:block"
+                    onClick={() => removeProject(p.mediaId)}
+                    aria-label={`Delete project ${p.name}`}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </section>

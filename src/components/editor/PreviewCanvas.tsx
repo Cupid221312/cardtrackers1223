@@ -140,6 +140,12 @@ export default function PreviewCanvas() {
         s.seekTo(
           Math.min(Math.max(0, s.currentTime + step), s.source.duration),
         );
+      } else if (e.code === "KeyS" && !e.ctrlKey && !e.metaKey) {
+        const c = s.clips.find((cl) => cl.id === s.selectedClipId);
+        if (c && s.currentTime > c.start + 3 && s.currentTime < c.end - 3) {
+          e.preventDefault();
+          s.splitClip(c.id, s.currentTime);
+        }
       } else if (e.code === "KeyI" || e.code === "KeyO") {
         // Trim the selected clip's in/out point to the playhead.
         const c = s.clips.find((cl) => cl.id === s.selectedClipId);

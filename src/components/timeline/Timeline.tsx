@@ -89,6 +89,28 @@ export default function Timeline() {
               </span>
             </span>
           )}
+          <span className="h-3.5 w-px bg-ink-600" />
+          <button
+            className="rounded px-1.5 py-0.5 font-medium text-slate-300 transition hover:bg-ink-700 disabled:opacity-40"
+            onClick={() => useEditorStore.getState().addManualClip()}
+            disabled={!source}
+            title="New clip window at the playhead"
+          >
+            + Clip
+          </button>
+          <button
+            className="rounded px-1.5 py-0.5 font-medium text-slate-300 transition hover:bg-ink-700 disabled:opacity-40"
+            onClick={() => {
+              const s = useEditorStore.getState();
+              if (s.selectedClipId) s.splitClip(s.selectedClipId, s.currentTime);
+            }}
+            disabled={
+              !clip || currentTime < clip.start + 3 || currentTime > clip.end - 3
+            }
+            title="Split the selected clip at the playhead (S)"
+          >
+            ✂ Split
+          </button>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[10px] uppercase tracking-wider text-slate-600">

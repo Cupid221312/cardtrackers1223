@@ -185,6 +185,43 @@ export interface SourceMedia {
 }
 
 // ---------------------------------------------------------------------------
+// Projects (server-side session persistence)
+// ---------------------------------------------------------------------------
+
+/** Everything needed to restore an editing session, keyed by media id. */
+export interface SavedProject {
+  mediaId: string;
+  name: string;
+  duration: number;
+  width: number;
+  height: number;
+  origin: "upload" | "youtube";
+  savedAt: number;
+  state: {
+    transcript: Transcript | null;
+    clips: ClipCandidate[];
+    selectedClipId: string | null;
+    captionStyle: CaptionStyle;
+    hookBanner: HookBanner;
+    framing: Framing;
+    filters: VisualFilters;
+    /** musicUrl is a blob URL and is rebuilt from musicMediaId on restore. */
+    audio: Omit<AudioSettings, "musicUrl">;
+    /** Sticker preview urls are rebuilt from their data URLs on restore. */
+    stickers: Array<Omit<Sticker, "url">>;
+    keyframesByClip: Record<string, ZoomKeyframe[]>;
+  };
+}
+
+export interface SavedProjectSummary {
+  mediaId: string;
+  name: string;
+  duration: number;
+  savedAt: number;
+  clipCount: number;
+}
+
+// ---------------------------------------------------------------------------
 // Export
 // ---------------------------------------------------------------------------
 

@@ -13,6 +13,7 @@ import type {
   ExportJobInfo,
   Framing,
   HookBanner,
+  SavedProject,
   SourceMedia,
   Sticker,
   Transcript,
@@ -74,6 +75,12 @@ interface EditorState {
   setClipFinderSettings: (s: Partial<ClipFinderSettings>) => void;
   selectClip: (clipId: string | null) => void;
   setClipRange: (clipId: string, start: number, end: number) => void;
+  /** Create a user-defined clip window at the playhead and select it. */
+  addManualClip: () => void;
+  /** Split a clip into two at a source-time inside it. */
+  splitClip: (clipId: string, at: number) => void;
+  /** Hydrate a full editing session from a saved project. */
+  restoreProject: (project: SavedProject) => void;
 
   setCurrentTime: (t: number) => void;
   setPlaying: (v: boolean) => void;
@@ -263,6 +270,99 @@ export const useEditorStore = create<EditorState>()(
           : c,
       ),
     })),
+
+  addManualClip: () => {
+    const s = get();
+    if (!s.source) return;
+    const start = Math.min(s.currentTime, Math.max(0, s.source.duration - 5));
+    const end = Math.min(start + 30, s.source.duration);
+    const manualCount = s.clips.filter((c) => c.id.startsWith("manual-")).length;
+    const clip: ClipCandidate = {
+      id: `manual-${Date.now()}`,
+      title: `CUSTOM CLIP ${manualCount + 1}`,
+      start,
+      end,
+      score: 50,
+      reason: "Created manually",
+    };
+    set({ clips: [...s.clips, clip].sort((a, b) => a.start - b.start) });
+    get().selectClip(clip.id);
+  },
+
+  splitClip: (clipId, at) =>
+    set((s) => {
+      const clip = s.clips.find((c) => c.id === clipId);
+      // Both halves must stay usable; refuse razor-thin splits.
+      if (!clip || at < clip.start + 3 || at > clip.end - 3) return s;
+      const left: ClipCandidate = { ...clip, id: `${clip.id}-a`, end: at };
+      const right: ClipCandidate = {
+        ...clip,
+        id: `${clip.id}-b`,
+        title: `${clip.title.replace(/…$/, "")} (2)`.slice(0, 60),
+        start: at,
+      };
+      const cut = at - clip.start;
+      const kfs = s.keyframesByClip[clipId] ?? [];
+      const keyframesByClip = { ...s.keyframesByClip };
+      delete keyframesByClip[clipId];
+      if (kfs.length > 0) {
+        keyframesByClip[left.id] = kfs.filter((k) => k.time <= cut);
+        keyframesByClip[right.id] = kfs
+          .filter((k) => k.time > cut)
+          .map((k) => ({ ...k, time: k.time - cut }));
+      }
+      return {
+        clips: s.clips
+          .flatMap((c) => (c.id === clipId ? [left, right] : [c]))
+          .sort((a, b) => a.start - b.start),
+        keyframesByClip,
+        selectedClipId:
+          s.selectedClipId === clipId ? left.id : s.selectedClipId,
+      };
+    }),
+
+  restoreProject: (project) => {
+    const { state } = project;
+    set({
+      source: {
+        mediaId: project.mediaId,
+        previewUrl: `/api/media/${project.mediaId}`,
+        name: project.name,
+        duration: project.duration,
+        width: project.width,
+        height: project.height,
+        origin: project.origin,
+      },
+      transcript: state.transcript,
+      captionLines: state.transcript
+        ? buildCaptionLines(
+            state.transcript.words,
+            state.captionStyle.maxWordsPerLine,
+          )
+        : [],
+      clips: state.clips,
+      selectedClipId: state.selectedClipId,
+      captionStyle: state.captionStyle,
+      hookBanner: state.hookBanner,
+      hookBannerEdited: true, // restored banner text is authoritative
+      framing: state.framing,
+      filters: state.filters,
+      audio: {
+        ...state.audio,
+        musicUrl: state.audio.musicMediaId
+          ? `/api/media/${state.audio.musicMediaId}`
+          : "",
+      },
+      stickers: state.stickers.map((st) => ({ ...st, url: st.dataUrl })),
+      keyframesByClip: state.keyframesByClip,
+      currentTime: 0,
+      playing: false,
+      ingesting: false,
+      ingestError: "",
+      transcribing: false,
+      detectingClips: false,
+    });
+  },
 
   setCurrentTime: (currentTime) => set({ currentTime }),
   setPlaying: (playing) => set({ playing }),

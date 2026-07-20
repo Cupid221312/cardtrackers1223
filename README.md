@@ -43,10 +43,19 @@ and OpenAI Whisper.
 - **Undo/redo** across all creative edits (trims, styles, keyframes,
   stickers, transcript corrections) with burst-grouping so slider drags are
   one entry — `Ctrl/Cmd+Z`, `Ctrl/Cmd+Shift+Z`, or the header buttons.
+- **Manual clip tools**: create a custom clip window at the playhead
+  (`+ Clip`) and split the selected clip in two (`✂ Split` or `S`) — split
+  keyframe tracks are divided and re-based automatically. Keyframes show as
+  diamond markers on the selected clip block.
 - **Keyboard**: `Space` play/pause · `←/→` seek 1 s (`Shift` = 5 s) ·
-  `I`/`O` trim the selected clip's in/out point to the playhead.
-- Styling and finder settings **persist across reloads** (localStorage);
-  media and jobs stay session-scoped.
+  `I`/`O` trim in/out to the playhead · `S` split at the playhead.
+- **Project autosave & restore**: the whole session (transcript, clips,
+  styles, stickers, keyframes) autosaves server-side ~2 s after each edit,
+  and a Recent Projects list restores everything — including preview
+  playback via the stored media — after a reload or on another day.
+  Styling defaults also persist in localStorage.
+- **Demo footage**: a one-click generated demo video exercises the entire
+  pipeline without uploading anything.
 
 **Export**
 
@@ -93,6 +102,8 @@ src/
 │     ├─ media/[id]/            # Range-aware streaming for <video>
 │     ├─ transcribe/            # Whisper (word timestamps) or demo fallback
 │     ├─ clips/detect/          # heuristics + optional LLM refinement
+│     ├─ projects/              # session autosave: list/save/load/delete
+│     ├─ demo/                  # generated demo footage (cached)
 │     └─ export/                # job queue: POST create, GET status/download
 ├─ components/
 │  ├─ editor/                   # StudioShell, PreviewCanvas, CaptionOverlay,

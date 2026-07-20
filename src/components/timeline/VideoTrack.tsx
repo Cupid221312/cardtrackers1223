@@ -1,6 +1,9 @@
 "use client";
 
-import { useEditorStore } from "@/lib/store/editorStore";
+import {
+  useEditorStore,
+  useSelectedClipKeyframes,
+} from "@/lib/store/editorStore";
 import TrackShell from "@/components/timeline/TrackShell";
 import { clamp } from "@/lib/time";
 import clsx from "clsx";
@@ -21,6 +24,7 @@ export default function VideoTrack({
   const clips = useEditorStore((s) => s.clips);
   const selectedClipId = useEditorStore((s) => s.selectedClipId);
   const pxPerSec = useEditorStore((s) => s.pxPerSec);
+  const selectedKeyframes = useSelectedClipKeyframes();
 
   const duration = source?.duration ?? 0;
 
@@ -119,6 +123,15 @@ export default function VideoTrack({
             </span>
             {selected && (
               <>
+                {/* zoom/pan keyframe markers */}
+                {selectedKeyframes.map((kf) => (
+                  <div
+                    key={kf.id}
+                    className="pointer-events-none absolute bottom-1 h-2 w-2 -translate-x-1/2 rotate-45 rounded-[2px] bg-brand-yellow shadow"
+                    style={{ left: kf.time * pxPerSec }}
+                    title={`${kf.zoom.toFixed(2)}× @ ${kf.time.toFixed(1)}s`}
+                  />
+                ))}
                 <TrimHandle
                   side="left"
                   onPointerDown={(e) => dragEdge(e, clip.id, "start")}

@@ -8,6 +8,7 @@ import InspectorPanel from "@/components/editor/InspectorPanel";
 import Timeline from "@/components/timeline/Timeline";
 import ExportQueueModal from "@/components/editor/ExportQueueModal";
 import { redoEdit, undoEdit, useEditorStore } from "@/lib/store/editorStore";
+import { useProjectAutosave } from "@/lib/store/useProjectAutosave";
 
 export default function StudioShell() {
   // Persisted styling settings are rehydrated after mount (skipHydration
@@ -15,6 +16,7 @@ export default function StudioShell() {
   useEffect(() => {
     void useEditorStore.persist.rehydrate();
   }, []);
+  useProjectAutosave();
 
   const setExportModalOpen = useEditorStore((s) => s.setExportModalOpen);
   const hasSource = useEditorStore((s) => s.source !== null);
