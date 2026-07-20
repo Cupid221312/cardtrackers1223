@@ -60,6 +60,10 @@ interface EditorState {
   // ---- timeline ------------------------------------------------------------
   pxPerSec: number;
 
+  /** Click-to-track picking mode: canvas shows the full frame and waits
+   *  for the user to drop a dot on the subject. */
+  trackPicking: boolean;
+
   // ---- export --------------------------------------------------------------
   exportJobs: ExportJobInfo[];
   exportModalOpen: boolean;
@@ -105,6 +109,7 @@ interface EditorState {
   setKeyframes: (clipId: string, kfs: ZoomKeyframe[]) => void;
 
   setPxPerSec: (v: number) => void;
+  setTrackPicking: (v: boolean) => void;
 
   setExportModalOpen: (v: boolean) => void;
   upsertExportJob: (job: ExportJobInfo) => void;
@@ -179,6 +184,7 @@ export const useEditorStore = create<EditorState>()(
   keyframesByClip: {},
 
   pxPerSec: 12,
+  trackPicking: false,
 
   exportJobs: [],
   exportModalOpen: false,
@@ -194,6 +200,7 @@ export const useEditorStore = create<EditorState>()(
       playing: false,
       ingestError: "",
       keyframesByClip: {},
+      trackPicking: false,
     }),
 
   setIngesting: (ingesting, error = "") => set({ ingesting, ingestError: error }),
@@ -452,6 +459,7 @@ export const useEditorStore = create<EditorState>()(
     })),
 
   setPxPerSec: (v) => set({ pxPerSec: clamp(v, 2, 120) }),
+  setTrackPicking: (trackPicking) => set({ trackPicking }),
 
   setExportModalOpen: (exportModalOpen) => set({ exportModalOpen }),
   upsertExportJob: (job) =>

@@ -87,6 +87,7 @@ export default function InspectorPanel() {
   const musicInputRef = useRef<HTMLInputElement>(null);
   const [reframing, setReframing] = useState(false);
   const [reframeNote, setReframeNote] = useState("");
+  const trackPicking = useEditorStore((s) => s.trackPicking);
 
   const st = () => useEditorStore.getState();
 
@@ -356,6 +357,21 @@ export default function InspectorPanel() {
           title="Track motion across the clip and generate pan keyframes"
         >
           {reframing ? "Analyzing motion…" : "✦ Auto-reframe (motion tracking)"}
+        </button>
+        <button
+          className={clsx(
+            "mt-1.5 w-full rounded-lg border px-3 py-1.5 text-xs font-medium transition",
+            trackPicking
+              ? "border-brand-yellow/70 bg-brand-yellow/10 text-brand-yellow"
+              : "border-ink-600 bg-ink-800 text-slate-200 hover:border-ink-500 hover:bg-ink-700",
+          )}
+          onClick={() => st().setTrackPicking(!trackPicking)}
+          disabled={!clip || !source}
+          title="Drop a dot on a person or object in the preview — the frame will follow it"
+        >
+          {trackPicking
+            ? "Click the subject in the preview…"
+            : "🎯 Track subject (place a dot)"}
         </button>
         <button
           className="btn-ghost mt-1.5 w-full !py-1.5 text-xs"

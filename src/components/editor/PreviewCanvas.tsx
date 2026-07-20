@@ -18,6 +18,7 @@ import {
   computeKeepSegments,
   nextKeepTime,
 } from "@/services/ai/silence";
+import clsx from "clsx";
 
 /**
  * The 9:16 live preview. A hidden main <video> drives:
@@ -45,6 +46,64 @@ export default function PreviewCanvas() {
   }, [silenceCut.enabled, silenceCut.minGap, clip, words]);
   const keepRef = useRef<TimeRange[] | null>(null);
   keepRef.current = keepSegments;
+
+  // ---- click-to-track subject picking -------------------------------------
+  const trackPicking = useEditorStore((s) => s.trackPicking);
+  const [trackStatus, setTrackStatus] = useState("");
+  const [trackDot, setTrackDot] = useState<{ x: number; y: number } | null>(null);
+
+  async function handleTrackPick(e: React.MouseEvent<HTMLDivElement>) {
+    if (!source || !clip) return;
+    const frame = frameRef.current;
+    if (!frame) return;
+    const rect = frame.getBoundingClientRect();
+    // During picking the video renders object-fit:contain with no
+    // transform, so the content rect is plain letterbox math.
+    const scale = Math.min(
+      rect.width / source.width,
+      rect.height / source.height,
+    );
+    const contentW = source.width * scale;
+    const contentH = source.height * scale;
+    const offX = (rect.width - contentW) / 2;
+    const offY = (rect.height - contentH) / 2;
+    const px = (e.clientX - rect.left - offX) / contentW;
+    const py = (e.clientY - rect.top - offY) / contentH;
+    if (px < 0 || px > 1 || py < 0 || py > 1) return; // clicked letterbox
+
+    const s = useEditorStore.getState();
+    const time = Math.min(Math.max(s.currentTime, clip.start), clip.end);
+    setTrackDot({ x: offX + px * contentW, y: offY + py * contentH });
+    setTrackStatus("Tracking subject…");
+    s.setTrackPicking(false);
+    s.setPlaying(false);
+    try {
+      const res = await fetch(`/api/media/${source.mediaId}/track`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          start: clip.start,
+          end: clip.end,
+          time,
+          point: { x: px, y: py },
+        }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body?.error ?? "Tracking failed");
+      s.updateFraming({ mode: "crop", zoom: 1, panX: 0, panY: 0 });
+      s.setKeyframes(clip.id, body.keyframes);
+      setTrackStatus(
+        body.confidence < 0.35
+          ? `Locked with weak confidence (${Math.round(body.confidence * 100)}%) — try a higher-contrast point.`
+          : `Subject locked ✓ ${body.keyframes.length} keyframes · ${Math.round(body.confidence * 100)}% confidence`,
+      );
+    } catch (err) {
+      setTrackStatus(err instanceof Error ? err.message : "Tracking failed");
+    } finally {
+      setTrackDot(null);
+      setTimeout(() => setTrackStatus(""), 6000);
+    }
+  }
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -195,8 +254,11 @@ export default function PreviewCanvas() {
   const effZoom = kf.zoom;
   const cssFilter = `brightness(${1 + filters.brightness}) contrast(${filters.contrast}) saturate(${filters.saturation})`;
 
-  const foregroundStyle: React.CSSProperties =
-    framing.mode === "crop"
+  const foregroundStyle: React.CSSProperties = trackPicking
+    ? // Picking mode: neutral full-frame view so the click maps 1:1 to
+      // source coordinates.
+      { objectFit: "contain", filter: cssFilter }
+    : framing.mode === "crop"
       ? {
           objectFit: "cover",
           transform: `scale(${effZoom}) translate(${kf.panX * -18}%, ${kf.panY * -18}%)`,
@@ -216,9 +278,14 @@ export default function PreviewCanvas() {
       {/* ---- canvas frame ------------------------------------------------- */}
       <div
         ref={frameRef}
-        className="relative overflow-hidden rounded-2xl border border-ink-600 bg-black shadow-panel"
+        className={clsx(
+          "relative overflow-hidden rounded-2xl border bg-black shadow-panel",
+          trackPicking
+            ? "cursor-crosshair border-brand-yellow/70"
+            : "border-ink-600",
+        )}
         style={{ width: frameSize.width, height: frameSize.height }}
-        onClick={togglePlay}
+        onClick={trackPicking ? handleTrackPick : togglePlay}
       >
         {source ? (
           <>
@@ -252,9 +319,26 @@ export default function PreviewCanvas() {
             {audio.musicUrl && (
               <audio ref={musicRef} src={audio.musicUrl} loop />
             )}
-            <HookBannerOverlay canvasHeight={frameSize.height} />
-            <CaptionOverlay canvasHeight={frameSize.height} />
+            {!trackPicking && (
+              <>
+                <HookBannerOverlay canvasHeight={frameSize.height} />
+                <CaptionOverlay canvasHeight={frameSize.height} />
+              </>
+            )}
             <StickerLayer />
+            {trackPicking && (
+              <div className="pointer-events-none absolute inset-x-0 top-3 z-40 flex justify-center">
+                <span className="rounded-full bg-brand-yellow px-3 py-1 text-[11px] font-bold text-black shadow">
+                  Click the person or object to track
+                </span>
+              </div>
+            )}
+            {trackDot && (
+              <div
+                className="pointer-events-none absolute z-40 h-4 w-4 -translate-x-1/2 -translate-y-1/2 animate-ping rounded-full border-2 border-brand-yellow bg-brand-yellow/40"
+                style={{ left: trackDot.x, top: trackDot.y }}
+              />
+            )}
           </>
         ) : (
           <EmptyCanvas />
@@ -295,6 +379,11 @@ export default function PreviewCanvas() {
         <span className="rounded border border-ink-600 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-slate-500">
           9:16 · 1080×1920
         </span>
+        {trackStatus && (
+          <span className="text-[11px] font-medium text-brand-yellow">
+            {trackStatus}
+          </span>
+        )}
       </div>
     </div>
   );
