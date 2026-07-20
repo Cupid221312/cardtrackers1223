@@ -7,6 +7,7 @@ import PreviewCanvas from "@/components/editor/PreviewCanvas";
 import InspectorPanel from "@/components/editor/InspectorPanel";
 import Timeline from "@/components/timeline/Timeline";
 import ExportQueueModal from "@/components/editor/ExportQueueModal";
+import ShortcutHelp from "@/components/editor/ShortcutHelp";
 import { redoEdit, undoEdit, useEditorStore } from "@/lib/store/editorStore";
 import { useProjectAutosave } from "@/lib/store/useProjectAutosave";
 
@@ -103,6 +104,7 @@ export default function StudioShell() {
       </footer>
 
       <ExportQueueModal />
+      <ShortcutHelp />
     </div>
   );
 }

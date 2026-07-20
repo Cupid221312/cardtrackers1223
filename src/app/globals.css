@@ -71,6 +71,30 @@ input[type="range"].slider::-moz-range-thumb {
   @apply mb-1 block text-[11px] font-medium uppercase tracking-wider text-slate-400;
 }
 
+/* --- caption entrance animations (mirrored in the ASS export) ------------ */
+@keyframes caption-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes caption-pop-in {
+  0% {
+    transform: scale(1.12);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.caption-anim-fade {
+  animation: caption-fade-in 140ms ease-out;
+}
+.caption-anim-pop {
+  animation: caption-pop-in 120ms ease-out;
+}
+
 .text-input {
   @apply w-full rounded-lg border border-ink-600 bg-ink-900 px-3 py-2 text-sm
     text-slate-100 placeholder-slate-500 outline-none transition

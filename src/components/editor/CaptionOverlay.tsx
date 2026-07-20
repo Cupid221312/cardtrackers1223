@@ -2,6 +2,7 @@
 
 import { useEditorStore, useSelectedClip } from "@/lib/store/editorStore";
 import { activeLineAt, activeWordIndex } from "@/services/ai/captions";
+import clsx from "clsx";
 
 /**
  * Karaoke-style caption renderer. Shows the caption line being spoken at the
@@ -40,7 +41,12 @@ export default function CaptionOverlay({
       style={{ top: `${style.verticalPosition * 100}%` }}
     >
       <div
-        className="flex max-w-[82%] flex-wrap items-center justify-center gap-x-[0.28em] text-center leading-snug"
+        key={line.id}
+        className={clsx(
+          "flex max-w-[82%] flex-wrap items-center justify-center gap-x-[0.28em] text-center leading-snug",
+          style.animation === "fade" && "caption-anim-fade",
+          style.animation === "pop" && !style.karaoke && "caption-anim-pop",
+        )}
         style={{
           fontFamily: `"${style.fontFamily}", ${fontFallbacks}`,
           fontSize: fontPx,
@@ -85,7 +91,10 @@ export default function CaptionOverlay({
                   isActive && style.activeBgColor
                     ? `0 ${fontPx * 0.18}px`
                     : undefined,
-                transform: isActive ? "scale(1.08)" : "scale(1)",
+                transform:
+                  isActive && style.animation === "pop"
+                    ? "scale(1.08)"
+                    : "scale(1)",
               }}
             >
               {style.uppercase ? word.text.toUpperCase() : word.text}

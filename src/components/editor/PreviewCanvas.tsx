@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   interpolateKeyframes,
   redoEdit,
@@ -13,6 +13,11 @@ import CaptionOverlay from "@/components/editor/CaptionOverlay";
 import HookBannerOverlay from "@/components/editor/HookBannerOverlay";
 import StickerLayer from "@/components/editor/StickerLayer";
 import { formatTime } from "@/lib/time";
+import {
+  type TimeRange,
+  computeKeepSegments,
+  nextKeepTime,
+} from "@/services/ai/silence";
 
 /**
  * The 9:16 live preview. A hidden main <video> drives:
@@ -30,6 +35,16 @@ export default function PreviewCanvas() {
   const seekVersion = useEditorStore((s) => s.seekVersion);
   const clip = useSelectedClip();
   const keyframes = useSelectedClipKeyframes();
+  const silenceCut = useEditorStore((s) => s.silenceCut);
+  const words = useEditorStore((s) => s.transcript?.words ?? null);
+
+  // Live jump cuts: the rAF loop reads this via ref and skips silences.
+  const keepSegments = useMemo<TimeRange[] | null>(() => {
+    if (!silenceCut.enabled || !clip || !words) return null;
+    return computeKeepSegments(words, clip.start, clip.end, silenceCut.minGap);
+  }, [silenceCut.enabled, silenceCut.minGap, clip, words]);
+  const keepRef = useRef<TimeRange[] | null>(null);
+  keepRef.current = keepSegments;
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -62,6 +77,14 @@ export default function PreviewCanvas() {
         const c = state.clips.find((cl) => cl.id === state.selectedClipId);
         if (c && t >= c.end) {
           video.currentTime = c.start; // loop the selected clip
+        } else if (c && keepRef.current) {
+          // Jump-cut preview: hop over removed silences in real time.
+          const next = nextKeepTime(keepRef.current, t);
+          if (next === null) {
+            video.currentTime = keepRef.current[0]?.start ?? c.start;
+          } else if (next - t > 0.03) {
+            video.currentTime = next;
+          }
         }
         state.setCurrentTime(video.currentTime);
         // paint blurred background

@@ -34,6 +34,7 @@ export function buildProjectPayload(): SavedProject | null {
         musicName: s.audio.musicName,
         musicVolume: s.audio.musicVolume,
       },
+      silenceCut: s.silenceCut,
       stickers: s.stickers.map((st) => ({
         id: st.id,
         name: st.name,
@@ -68,6 +69,7 @@ export function useProjectAutosave(): void {
         state.framing !== prev.framing ||
         state.filters !== prev.filters ||
         state.audio !== prev.audio ||
+        state.silenceCut !== prev.silenceCut ||
         state.stickers !== prev.stickers ||
         state.keyframesByClip !== prev.keyframesByClip ||
         state.source !== prev.source;

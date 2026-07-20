@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useEditorStore, useSelectedClip } from "@/lib/store/editorStore";
 import { linesInRange } from "@/services/ai/captions";
+import { compactDuration, computeKeepSegments } from "@/services/ai/silence";
 import type { ClipCandidate, ExportPreset, ExportRequest } from "@/lib/types";
 import { formatTime } from "@/lib/time";
 import clsx from "clsx";
@@ -20,9 +21,24 @@ export default function ExportQueueModal() {
   const clip = useSelectedClip();
   const source = useEditorStore((s) => s.source);
   const clipCount = useEditorStore((s) => s.clips.length);
+  const silenceCut = useEditorStore((s) => s.silenceCut);
+  const transcript = useEditorStore((s) => s.transcript);
   const [preset, setPreset] = useState<ExportPreset>("tiktok");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [previewing, setPreviewing] = useState<string | null>(null);
+
+  const compactLen =
+    clip && silenceCut.enabled && transcript
+      ? compactDuration(
+          computeKeepSegments(
+            transcript.words,
+            clip.start,
+            clip.end,
+            silenceCut.minGap,
+          ),
+        )
+      : null;
 
   // Poll active jobs while the app is open (modal or not) so the header
   // badge stays live.
@@ -81,6 +97,15 @@ export default function ExportQueueModal() {
         scale: st.scale,
         opacity: st.opacity,
       })),
+      keepSegments:
+        s.silenceCut.enabled && s.transcript
+          ? computeKeepSegments(
+              s.transcript.words,
+              target.start,
+              target.end,
+              s.silenceCut.minGap,
+            )
+          : [],
       sourceWidth: s.source.width,
       sourceHeight: s.source.height,
     };
@@ -153,7 +178,14 @@ export default function ExportQueueModal() {
               Rendering{" "}
               <span className="font-semibold text-slate-200">{clip.title}</span>{" "}
               · {formatTime(clip.start)}–{formatTime(clip.end)} (
-              {(clip.end - clip.start).toFixed(1)}s)
+              {(clip.end - clip.start).toFixed(1)}s
+              {compactLen !== null && (
+                <span className="text-brand-green">
+                  {" "}
+                  → {compactLen.toFixed(1)}s after jump cuts
+                </span>
+              )}
+              )
             </p>
           ) : (
             <p className="mb-2 text-xs text-brand-yellow">
@@ -249,14 +281,32 @@ export default function ExportQueueModal() {
                   {PRESETS.find((p) => p.id === job.preset)?.label ?? job.preset}
                 </span>
                 {job.status === "done" && job.outputUrl && (
-                  <a
-                    href={job.outputUrl}
-                    className="rounded bg-brand-green/15 px-2 py-0.5 text-[11px] font-semibold text-brand-green hover:bg-brand-green/25"
-                  >
-                    Download
-                  </a>
+                  <>
+                    <button
+                      className="rounded bg-ink-700 px-2 py-0.5 text-[11px] font-semibold text-slate-300 hover:bg-ink-600"
+                      onClick={() =>
+                        setPreviewing(previewing === job.id ? null : job.id)
+                      }
+                    >
+                      {previewing === job.id ? "Hide" : "▶ Preview"}
+                    </button>
+                    <a
+                      href={job.outputUrl}
+                      className="rounded bg-brand-green/15 px-2 py-0.5 text-[11px] font-semibold text-brand-green hover:bg-brand-green/25"
+                    >
+                      Download
+                    </a>
+                  </>
                 )}
               </div>
+              {previewing === job.id && job.outputUrl && (
+                <video
+                  src={job.outputUrl}
+                  controls
+                  autoPlay
+                  className="mt-2 max-h-72 w-full rounded-lg bg-black"
+                />
+              )}
               {job.error && (
                 <p className="mt-1 text-[11px] text-brand-red">{job.error}</p>
               )}

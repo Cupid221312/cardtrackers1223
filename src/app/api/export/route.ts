@@ -31,11 +31,12 @@ const ExportSchema = z.object({
       }),
     ),
     style: z.object({
-      template: z.enum(["reels", "hormozi", "clean", "pop"]),
+      template: z.enum(["reels", "burst", "hormozi", "clean", "pop"]),
       fontFamily: z.string(),
       fontSize: z.number().min(0.01).max(0.15),
       fontWeight: z.number().min(100).max(1000),
       karaoke: z.boolean(),
+      animation: z.enum(["none", "fade", "pop"]),
       uppercase: z.boolean(),
       textColor: z.string(),
       activeColor: z.string(),
@@ -91,6 +92,9 @@ const ExportSchema = z.object({
       opacity: z.number().min(0).max(1),
     }),
   ),
+  keepSegments: z
+    .array(z.object({ start: z.number().min(0), end: z.number().positive() }))
+    .max(200),
   sourceWidth: z.number(),
   sourceHeight: z.number(),
 });

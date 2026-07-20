@@ -14,6 +14,7 @@ import type {
   Framing,
   HookBanner,
   SavedProject,
+  SilenceCutSettings,
   SourceMedia,
   Sticker,
   Transcript,
@@ -51,6 +52,7 @@ interface EditorState {
   framing: Framing;
   filters: VisualFilters;
   audio: AudioSettings;
+  silenceCut: SilenceCutSettings;
   stickers: Sticker[];
   /** Zoom/pan keyframes keyed by clip id (times relative to clip start). */
   keyframesByClip: Record<string, ZoomKeyframe[]>;
@@ -93,6 +95,7 @@ interface EditorState {
   updateFraming: (patch: Partial<Framing>) => void;
   updateFilters: (patch: Partial<VisualFilters>) => void;
   updateAudio: (patch: Partial<AudioSettings>) => void;
+  updateSilenceCut: (patch: Partial<SilenceCutSettings>) => void;
   addSticker: (sticker: Sticker) => void;
   updateSticker: (id: string, patch: Partial<Sticker>) => void;
   removeSticker: (id: string) => void;
@@ -171,6 +174,7 @@ export const useEditorStore = create<EditorState>()(
   framing: { mode: "fit-blur", panX: 0, panY: 0, zoom: 1 },
   filters: DEFAULT_FILTERS,
   audio: DEFAULT_AUDIO,
+  silenceCut: { enabled: false, minGap: 0.6 },
   stickers: [],
   keyframesByClip: {},
 
@@ -354,6 +358,7 @@ export const useEditorStore = create<EditorState>()(
           ? `/api/media/${state.audio.musicMediaId}`
           : "",
       },
+      silenceCut: state.silenceCut ?? get().silenceCut,
       stickers: state.stickers.map((st) => ({ ...st, url: st.dataUrl })),
       keyframesByClip: state.keyframesByClip,
       currentTime: 0,
@@ -410,6 +415,8 @@ export const useEditorStore = create<EditorState>()(
   updateFraming: (patch) => set((s) => ({ framing: { ...s.framing, ...patch } })),
   updateFilters: (patch) => set((s) => ({ filters: { ...s.filters, ...patch } })),
   updateAudio: (patch) => set((s) => ({ audio: { ...s.audio, ...patch } })),
+  updateSilenceCut: (patch) =>
+    set((s) => ({ silenceCut: { ...s.silenceCut, ...patch } })),
 
   addSticker: (sticker) => set((s) => ({ stickers: [...s.stickers, sticker] })),
   updateSticker: (id, patch) =>
@@ -470,6 +477,7 @@ export const useEditorStore = create<EditorState>()(
         clipFinderSettings: s.clipFinderSettings,
         framing: s.framing,
         filters: s.filters,
+        silenceCut: s.silenceCut,
         hookBanner: {
           enabled: s.hookBanner.enabled,
           bgColor: s.hookBanner.bgColor,
@@ -493,6 +501,7 @@ export const useEditorStore = create<EditorState>()(
           captionStyle: { ...current.captionStyle, ...p.captionStyle },
           hookBanner: { ...current.hookBanner, ...p.hookBanner },
           audio: { ...current.audio, ...p.audio },
+          silenceCut: { ...current.silenceCut, ...p.silenceCut },
         };
       },
       },

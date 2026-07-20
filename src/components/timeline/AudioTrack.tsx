@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useEditorStore } from "@/lib/store/editorStore";
+import { useEditorStore, useSelectedClip } from "@/lib/store/editorStore";
 import TrackShell from "@/components/timeline/TrackShell";
+import { computeKeepSegments, removedRanges } from "@/services/ai/silence";
 
 /**
  * Audio track rendering the source's real amplitude envelope (decoded
@@ -19,7 +20,22 @@ export default function AudioTrack({
   const pxPerSec = useEditorStore((s) => s.pxPerSec);
   const volume = useEditorStore((s) => s.audio.volume);
   const musicName = useEditorStore((s) => s.audio.musicName);
+  const silenceCut = useEditorStore((s) => s.silenceCut);
+  const words = useEditorStore((s) => s.transcript?.words ?? null);
+  const clip = useSelectedClip();
   const [peaks, setPeaks] = useState<number[] | null>(null);
+
+  // Visualize what the jump cuts will remove from the selected clip.
+  const cuts = useMemo(() => {
+    if (!silenceCut.enabled || !clip || !words) return [];
+    const keep = computeKeepSegments(
+      words,
+      clip.start,
+      clip.end,
+      silenceCut.minGap,
+    );
+    return removedRanges(keep, clip.start, clip.end);
+  }, [silenceCut.enabled, silenceCut.minGap, clip, words]);
 
   const mediaId = source?.mediaId ?? "";
   useEffect(() => {
@@ -94,6 +110,20 @@ export default function AudioTrack({
           )}
         </div>
       )}
+      {source &&
+        cuts.map((cut, i) => (
+          <div
+            key={i}
+            className="pointer-events-none absolute inset-y-0.5 z-10 rounded-sm bg-brand-red/25"
+            style={{
+              left: cut.start * pxPerSec,
+              width: Math.max(2, (cut.end - cut.start) * pxPerSec),
+            }}
+            title={`Silence cut: ${(cut.end - cut.start).toFixed(2)}s removed`}
+          >
+            <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-brand-red/60" />
+          </div>
+        ))}
       {musicName && source && (
         <div
           className="pointer-events-none absolute bottom-0 left-0 h-1.5 rounded-full bg-accent/60"

@@ -22,17 +22,26 @@ and OpenAI Whisper.
 - Central **9:16 canvas** with live hook banner, karaoke captions (active
   word highlighting), draggable stickers/watermarks, and blur-fill or
   crop framing — preview matches the export pixel-for-pixel.
-- **Caption engine** with two rendering modes and four templates:
-  - *Phrase mode* — **Reels Clean** (the default): whole sentences in white
-    medium-weight sentence case wrap over 2–3 centered lines in the
-    upper-middle of the frame and hold on screen between phrases, matching
-    the classic Instagram Reels caption look.
+- **Silence removal (jump cuts)**: pauses longer than a tunable threshold
+  are detected from word-gap timestamps, skipped live during preview
+  playback, marked on the timeline, and cut frame-accurately on export via
+  select/aselect compaction — with captions and keyframes remapped onto
+  the shortened timeline. The export modal shows the before/after length.
+- **Auto punch-in zooms**: one click alternates 1.0×/1.12× zoom per
+  caption line for Hormozi-style cut energy (rendered via zoompan).
+- **Caption engine** with two rendering modes and five templates:
+  - *Phrase mode* — **Reels Clean** (the default) and **Center Burst**:
+    sentence-case white phrases that hold on screen between lines —
+    Reels Clean wraps 2–3 lines upper-middle (Instagram style), Center
+    Burst shows 2-word bold bursts dead-center.
   - *Karaoke mode* — **Hormozi Bold**, **Minimal Karaoke**, **Chip Pop**:
     short word groups with the spoken word highlighted.
-  Every field is tunable (font size/weight, colors, stroke, position, words
-  per caption, highlight on/off). Double-click any transcript word to
-  correct it — captions update instantly because they derive from the same
-  word objects.
+  Entrance animations (fade / pop) render identically in preview and in
+  the burned export (ASS `\fad` / scale transforms). Every field is
+  tunable (font size/weight, colors, stroke, position, words per caption,
+  highlight on/off). Double-click any transcript word to correct it —
+  captions update instantly because they derive from the same word
+  objects.
 - **Multi-track timeline** (video / audio / text) with click-and-drag
   scrubbing, trim handles on the selected clip, drag-to-slide clip windows,
   and drag-to-retime caption lines. Zoomable px-per-second scale, real
@@ -55,7 +64,10 @@ and OpenAI Whisper.
   keyframe tracks are divided and re-based automatically. Keyframes show as
   diamond markers on the selected clip block.
 - **Keyboard**: `Space` play/pause · `←/→` seek 1 s (`Shift` = 5 s) ·
-  `I`/`O` trim in/out to the playhead · `S` split at the playhead.
+  `I`/`O` trim in/out to the playhead · `S` split at the playhead · `?`
+  opens the shortcut cheat-sheet.
+- **Export queue extras**: inline preview player for finished renders, and
+  live before/after clip length when jump cuts are active.
 - **Project autosave & restore**: the whole session (transcript, clips,
   styles, stickers, keyframes) autosaves server-side ~2 s after each edit,
   and a Recent Projects list restores everything — including preview

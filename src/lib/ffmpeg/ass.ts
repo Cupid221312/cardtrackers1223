@@ -43,8 +43,16 @@ export function buildAssDocument(opts: {
   /** Source-time of the clip start; events are emitted clip-relative. */
   clipStart: number;
   clipEnd: number;
+  /**
+   * Maps a source-time to the output timeline. Defaults to clip-relative
+   * identity; the exporter passes a compacting mapper when silence
+   * removal is active so captions stay in sync with the jump cuts.
+   */
+  timeMap?: (t: number) => number;
 }): string {
   const { lines, style, banner, clipStart, clipEnd } = opts;
+  const map = opts.timeMap ?? ((t: number) => t - clipStart);
+  const outEnd = map(clipEnd);
 
   const fontSize = Math.round(style.fontSize * PLAY_H);
   const outline = Math.max(0, Math.round(style.strokeWidth * fontSize * 0.45));
@@ -81,9 +89,15 @@ export function buildAssDocument(opts: {
 
   if (banner.enabled && banner.text.trim()) {
     events.push(
-      `Dialogue: 0,${assTime(0)},${assTime(clipEnd - clipStart)},Banner,,0,0,0,,${escapeAss(banner.text.trim())}`,
+      `Dialogue: 0,${assTime(0)},${assTime(outEnd)},Banner,,0,0,0,,${escapeAss(banner.text.trim())}`,
     );
   }
+
+  // Entrance animations, mirrored from the preview: phrase fade-in, or a
+  // scale pop that settles on the karaoke highlight.
+  const fadeTag = style.animation === "fade" ? "{\\fad(140,0)}" : "";
+  const popTag =
+    style.animation === "pop" ? "\\fscx112\\fscy112\\t(0,120,\\fscx100\\fscy100)" : "";
 
   const activeColor = assColor(style.activeColor);
   const activeBg = style.activeBgColor ? assColor(style.activeBgColor) : "";
@@ -102,12 +116,12 @@ export function buildAssDocument(opts: {
         line.end + 1.5,
         next ? next.start : Infinity,
       );
-      const evStart = Math.max(line.start, clipStart) - clipStart;
-      const evEnd = Math.min(Math.max(line.end, holdUntil), clipEnd) - clipStart;
-      if (evEnd <= evStart) continue;
+      const evStart = map(Math.max(line.start, clipStart));
+      const evEnd = map(Math.min(Math.max(line.end, holdUntil), clipEnd));
+      if (evEnd <= evStart + 0.01) continue;
       const text = line.words.map((w) => wordsText(w.text)).join(" ");
       events.push(
-        `Dialogue: 1,${assTime(evStart)},${assTime(evEnd)},Caption,,0,0,0,,${text}`,
+        `Dialogue: 1,${assTime(evStart)},${assTime(evEnd)},Caption,,0,0,0,,${fadeTag}${text}`,
       );
       continue;
     }
@@ -116,19 +130,20 @@ export function buildAssDocument(opts: {
       const word = line.words[i];
       // Event covers this word's speaking window; between words the next
       // event takes over, so the line stays continuously on screen.
-      const evStart = Math.max(word.start, clipStart) - clipStart;
-      const evEnd =
-        (i + 1 < line.words.length
+      const evStart = map(Math.max(word.start, clipStart));
+      const evEnd = map(
+        i + 1 < line.words.length
           ? Math.min(line.words[i + 1].start, clipEnd)
-          : Math.min(line.end, clipEnd)) - clipStart;
-      if (evEnd <= 0 || evEnd <= evStart) continue;
+          : Math.min(line.end, clipEnd),
+      );
+      if (evEnd <= 0.01 || evEnd <= evStart + 0.005) continue;
 
       const rendered = line.words
         .map((w, j) => {
           if (j !== i) return wordsText(w.text);
           const highlight = activeBg
-            ? `{\\c${activeColor}\\3c${activeBg}\\bord${Math.max(outline, Math.round(fontSize * 0.16))}}`
-            : `{\\c${activeColor}}`;
+            ? `{\\c${activeColor}\\3c${activeBg}\\bord${Math.max(outline, Math.round(fontSize * 0.16))}${popTag}}`
+            : `{\\c${activeColor}${popTag}}`;
           return `${highlight}${wordsText(w.text)}{\\r}`;
         })
         .join(" ");

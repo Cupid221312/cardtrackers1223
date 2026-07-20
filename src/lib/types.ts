@@ -65,7 +65,16 @@ export interface ClipFinderSettings {
 // Styling
 // ---------------------------------------------------------------------------
 
-export type CaptionTemplateId = "reels" | "hormozi" | "clean" | "pop";
+export type CaptionTemplateId = "reels" | "burst" | "hormozi" | "clean" | "pop";
+
+/** Entrance animation: phrase fade-in, or per-word pop on the highlight. */
+export type CaptionAnimation = "none" | "fade" | "pop";
+
+export interface SilenceCutSettings {
+  enabled: boolean;
+  /** Pauses longer than this many seconds get jump-cut. */
+  minGap: number;
+}
 
 export interface CaptionStyle {
   template: CaptionTemplateId;
@@ -80,6 +89,7 @@ export interface CaptionStyle {
    *         hold on screen between phrases (Instagram Reels style).
    */
   karaoke: boolean;
+  animation: CaptionAnimation;
   uppercase: boolean;
   textColor: string;
   activeColor: string;
@@ -215,6 +225,7 @@ export interface SavedProject {
     filters: VisualFilters;
     /** musicUrl is a blob URL and is rebuilt from musicMediaId on restore. */
     audio: Omit<AudioSettings, "musicUrl">;
+    silenceCut?: SilenceCutSettings;
     /** Sticker preview urls are rebuilt from their data URLs on restore. */
     stickers: Array<Omit<Sticker, "url">>;
     keyframesByClip: Record<string, ZoomKeyframe[]>;
@@ -276,6 +287,12 @@ export interface ExportRequest {
     scale: number;
     opacity: number;
   }>;
+  /**
+   * Source-time ranges to KEEP (silence removal). Empty = keep the whole
+   * clip. When present, the renderer compacts the timeline and remaps
+   * caption/keyframe times accordingly.
+   */
+  keepSegments: Array<{ start: number; end: number }>;
   sourceWidth: number;
   sourceHeight: number;
 }

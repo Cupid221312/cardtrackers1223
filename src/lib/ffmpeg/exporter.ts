@@ -6,6 +6,11 @@ import type { ExportJobInfo, ExportPreset, ExportRequest } from "@/lib/types";
 import { buildAssDocument } from "@/lib/ffmpeg/ass";
 import { animatedCropFilter, zoompanFilter } from "@/lib/ffmpeg/keyframes";
 import {
+  type TimeRange,
+  compactDuration,
+  makeCompactMapper,
+} from "@/services/ai/silence";
+import {
   EXPORT_DIR,
   ensureMediaDirs,
   findMediaPath,
@@ -98,6 +103,17 @@ async function runJob(job: JobRecord): Promise<void> {
     const clipDur = request.clip.end - request.clip.start;
     if (clipDur <= 0.5) throw new Error("Clip is too short to export");
 
+    // --- silence removal (jump cuts) -------------------------------------
+    // keepSegments come from the client's word-gap analysis; cap the
+    // segment count so the select expression stays parseable.
+    const keep: TimeRange[] =
+      request.keepSegments.length > 0 && request.keepSegments.length <= 60
+        ? request.keepSegments
+        : [];
+    const cutting = keep.length > 0 && compactDuration(keep) < clipDur - 0.05;
+    const outDur = cutting ? compactDuration(keep) : clipDur;
+    const timeMap = cutting ? makeCompactMapper(keep) : undefined;
+
     // --- side files ------------------------------------------------------
     const assPath = path.join(workDir, "captions.ass");
     await fs.writeFile(
@@ -108,6 +124,7 @@ async function runJob(job: JobRecord): Promise<void> {
         banner: request.hookBanner,
         clipStart: request.clip.start,
         clipEnd: request.clip.end,
+        timeMap,
       }),
     );
 
@@ -132,6 +149,9 @@ async function runJob(job: JobRecord): Promise<void> {
       stickerPaths,
       musicPath,
       outPath,
+      keep: cutting ? keep : [],
+      outDur,
+      timeMap,
     });
 
     const timeRe = /time=(\d+):(\d+):(\d+)\.(\d+)/;
@@ -139,7 +159,7 @@ async function runJob(job: JobRecord): Promise<void> {
       const m = timeRe.exec(line);
       if (m) {
         const t = +m[1] * 3600 + +m[2] * 60 + +m[3] + +m[4] / 100;
-        info.progress = Math.min(0.99, t / clipDur);
+        info.progress = Math.min(0.99, t / outDur);
       }
     });
 
@@ -167,22 +187,32 @@ function buildArgs(opts: {
   stickerPaths: string[];
   musicPath: string | null;
   outPath: string;
+  /** Keep segments (source time); empty = no silence cutting. */
+  keep: TimeRange[];
+  outDur: number;
+  timeMap?: (t: number) => number;
 }): string[] {
-  const { request, sourcePath, assPath, stickerPaths, musicPath, outPath } = opts;
+  const { request, sourcePath, assPath, stickerPaths, musicPath, outPath, keep, outDur, timeMap } = opts;
   const { filters, audio, clip, preset } = request;
   const clipDur = clip.end - clip.start;
   const p = PRESETS[preset];
+
+  // Keyframe times are clip-relative in SOURCE time; on a compacted
+  // timeline they must land where their moment ends up after the cuts.
+  const keyframes = timeMap
+    ? request.keyframes.map((k) => ({ ...k, time: timeMap(clip.start + k.time) }))
+    : request.keyframes;
 
   // With keyframes, framing animates (keyframes replace base framing,
   // matching the preview) and the static framing step runs at zoom=1 /
   // no pan. Pan-only crop keyframes (auto-reframe) use an animated crop
   // across the full source; anything with zoom animation uses zoompan on
   // the composed 9:16 stream.
-  const animated = request.keyframes.length > 0;
+  const animated = keyframes.length > 0;
   const panOnlyCrop =
     animated &&
     request.framing.mode === "crop" &&
-    request.keyframes.every((k) => k.zoom === 1);
+    keyframes.every((k) => k.zoom === 1);
   const framing = animated
     ? { ...request.framing, zoom: 1, panX: 0, panY: 0 }
     : request.framing;
@@ -201,11 +231,32 @@ function buildArgs(opts: {
   const eq = `eq=brightness=${filters.brightness.toFixed(3)}:contrast=${filters.contrast.toFixed(3)}:saturation=${filters.saturation.toFixed(3)}`;
   const chains: string[] = [];
 
+  // Silence removal: drop frames/samples outside the keep segments and
+  // re-stamp timestamps so downstream time-based filters see the
+  // compacted timeline. Times are relative to the trimmed input (-ss
+  // resets pts to 0 at clip start).
+  let srcV = "[0:v]";
+  let srcA = "[0:a]";
+  if (keep.length > 0) {
+    const expr = keep
+      .map(
+        (r) =>
+          `between(t,${Math.max(0, r.start - clip.start).toFixed(3)},${(r.end - clip.start).toFixed(3)})`,
+      )
+      .join("+");
+    chains.push(
+      `[0:v]select='${expr}',setpts=N/FRAME_RATE/TB[vcut]`,
+      `[0:a]aselect='${expr}',asetpts=N/SR/TB[acut]`,
+    );
+    srcV = "[vcut]";
+    srcA = "[acut]";
+  }
+
   if (framing.mode === "fit-blur") {
     const fgW = Math.round((OUT_W * framing.zoom) / 2) * 2;
     const blurSigma = Math.max(0, filters.backgroundBlur / 2);
     chains.push(
-      `[0:v]split=2[bgsrc][fgsrc]`,
+      `${srcV}split=2[bgsrc][fgsrc]`,
       `[bgsrc]scale=${OUT_W}:${OUT_H}:force_original_aspect_ratio=increase,crop=${OUT_W}:${OUT_H},gblur=sigma=${blurSigma.toFixed(1)},eq=brightness=-0.08:saturation=0.85[bg]`,
       `[fgsrc]scale=${fgW}:-2,${eq}[fg]`,
       `[bg][fg]overlay=x=(W-w)/2-(${(framing.panX * 0.12).toFixed(4)}*W):y=(H-h)/2-(${(framing.panY * 0.12).toFixed(4)}*H)[framed]`,
@@ -214,14 +265,14 @@ function buildArgs(opts: {
     // Cover-scale without cropping, then pan an animated 1080x1920 crop
     // window across the whole frame following the keyframe path.
     chains.push(
-      `[0:v]scale=${OUT_W}:${OUT_H}:force_original_aspect_ratio=increase,` +
-        `${animatedCropFilter(request.keyframes, OUT_W, OUT_H)},${eq}[framed]`,
+      `${srcV}scale=${OUT_W}:${OUT_H}:force_original_aspect_ratio=increase,` +
+        `${animatedCropFilter(keyframes, OUT_W, OUT_H)},${eq}[framed]`,
     );
   } else {
     // Cover-crop: upscale so the frame is filled at the requested zoom,
     // then crop a 1080x1920 window offset by the pan.
     chains.push(
-      `[0:v]scale=w=${OUT_W}*${framing.zoom.toFixed(3)}:h=${OUT_H}*${framing.zoom.toFixed(3)}:force_original_aspect_ratio=increase,` +
+      `${srcV}scale=w=${OUT_W}*${framing.zoom.toFixed(3)}:h=${OUT_H}*${framing.zoom.toFixed(3)}:force_original_aspect_ratio=increase,` +
         `crop=${OUT_W}:${OUT_H}:` +
         `x='(iw-${OUT_W})/2+${(framing.panX / 2).toFixed(4)}*(iw-${OUT_W})':` +
         `y='(ih-${OUT_H})/2+${(framing.panY / 2).toFixed(4)}*(ih-${OUT_H})',` +
@@ -234,7 +285,7 @@ function buildArgs(opts: {
     // Constant 60fps in, one output frame per input frame — `on/60` is
     // wall time, which the keyframe expressions expect.
     chains.push(
-      `[${vLabel}]fps=${OUT_FPS},${zoompanFilter(request.keyframes, OUT_W, OUT_H, OUT_FPS)}[zoomed]`,
+      `[${vLabel}]fps=${OUT_FPS},${zoompanFilter(keyframes, OUT_W, OUT_H, OUT_FPS)}[zoomed]`,
     );
     vLabel = "zoomed";
   }
@@ -257,11 +308,11 @@ function buildArgs(opts: {
   const aFilters: string[] = [`volume=${audio.volume.toFixed(2)}`];
   if (audio.noiseReduction) aFilters.push("afftdn=nf=-28");
   if (audio.volumeLeveling) aFilters.push("loudnorm=I=-14:TP=-1.5:LRA=11");
-  chains.push(`[0:a]${aFilters.join(",")}[a0]`);
+  chains.push(`${srcA}${aFilters.join(",")}[a0]`);
   let aLabel = "a0";
   if (musicPath) {
     chains.push(
-      `[${musicIndex}:a]volume=${audio.musicVolume.toFixed(2)},atrim=0:${clipDur.toFixed(3)}[am]`,
+      `[${musicIndex}:a]volume=${audio.musicVolume.toFixed(2)},atrim=0:${outDur.toFixed(3)}[am]`,
       `[a0][am]amix=inputs=2:duration=first:normalize=0[aout]`,
     );
     aLabel = "aout";
@@ -278,7 +329,7 @@ function buildArgs(opts: {
     "-c:a", "aac",
     "-b:a", `${p.audioKbps}k`,
     "-movflags", "+faststart",
-    "-t", clipDur.toFixed(3),
+    "-t", outDur.toFixed(3),
     outPath,
   );
   return args;

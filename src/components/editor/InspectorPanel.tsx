@@ -77,6 +77,7 @@ export default function InspectorPanel() {
   const framing = useEditorStore((s) => s.framing);
   const filters = useEditorStore((s) => s.filters);
   const audio = useEditorStore((s) => s.audio);
+  const silenceCut = useEditorStore((s) => s.silenceCut);
   const stickers = useEditorStore((s) => s.stickers);
   const clip = useSelectedClip();
   const keyframes = useSelectedClipKeyframes();
@@ -187,6 +188,27 @@ export default function InspectorPanel() {
               value={style.activeColor}
               onChange={(v) => st().updateCaptionStyle({ activeColor: v })}
             />
+          </div>
+          <div>
+            <span className="mb-1 block text-[11px] font-medium text-slate-400">
+              Entrance animation
+            </span>
+            <div className="grid grid-cols-3 gap-1.5">
+              {(["none", "fade", "pop"] as const).map((anim) => (
+                <button
+                  key={anim}
+                  onClick={() => st().updateCaptionStyle({ animation: anim })}
+                  className={clsx(
+                    "rounded-lg border px-2 py-1 text-[11px] font-medium capitalize transition",
+                    style.animation === anim
+                      ? "border-accent/70 bg-accent/10 text-white"
+                      : "border-ink-700 bg-ink-900 text-slate-400 hover:border-ink-500",
+                  )}
+                >
+                  {anim}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="flex items-center gap-4">
             <label className="flex items-center gap-2 text-[11px] font-medium text-slate-400">
@@ -335,6 +357,43 @@ export default function InspectorPanel() {
         >
           {reframing ? "Analyzing motion…" : "✦ Auto-reframe (motion tracking)"}
         </button>
+        <button
+          className="btn-ghost mt-1.5 w-full !py-1.5 text-xs"
+          onClick={() => {
+            if (!clip) return;
+            const s = st();
+            // Alternate 1.0× / 1.12× per caption line — reads as hard
+            // punch-in cuts because lines are back-to-back.
+            const lines = s.captionLines
+              .filter((l) => l.end > clip.start && l.start < clip.end)
+              .slice(0, 30);
+            if (lines.length < 2) return;
+            const kfs = lines.flatMap((l, i) => {
+              const zoom = i % 2 === 1 ? 1.12 : 1.0;
+              return [
+                {
+                  id: `pi-${i}a`,
+                  time: Math.max(0, l.start - clip.start),
+                  zoom,
+                  panX: 0,
+                  panY: 0,
+                },
+                {
+                  id: `pi-${i}b`,
+                  time: Math.min(clip.end, l.end) - clip.start,
+                  zoom,
+                  panX: 0,
+                  panY: 0,
+                },
+              ];
+            });
+            s.setKeyframes(clip.id, kfs);
+          }}
+          disabled={!clip}
+          title="Alternate punch-in zoom on every caption line (Hormozi-style cuts)"
+        >
+          ⚡ Auto punch-in zooms
+        </button>
         {reframeNote && (
           <p className="mt-1.5 text-[11px] text-slate-500">{reframeNote}</p>
         )}
@@ -433,6 +492,28 @@ export default function InspectorPanel() {
             onChange={(v) => st().updateAudio({ volume: v })}
             format={(v) => `${Math.round(v * 100)}%`}
           />
+          <label className="flex items-center gap-2 text-[11px] font-medium text-slate-400">
+            <input
+              type="checkbox"
+              className="accent-accent"
+              checked={silenceCut.enabled}
+              onChange={(e) =>
+                st().updateSilenceCut({ enabled: e.target.checked })
+              }
+            />
+            Remove silences (jump cuts)
+          </label>
+          {silenceCut.enabled && (
+            <Slider
+              label="Cut pauses longer than"
+              value={silenceCut.minGap}
+              min={0.3}
+              max={1.5}
+              step={0.05}
+              onChange={(v) => st().updateSilenceCut({ minGap: v })}
+              format={(v) => `${v.toFixed(2)}s`}
+            />
+          )}
           <label className="flex items-center gap-2 text-[11px] font-medium text-slate-400">
             <input
               type="checkbox"
