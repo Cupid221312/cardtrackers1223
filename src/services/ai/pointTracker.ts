@@ -1,4 +1,5 @@
 import type { ZoomKeyframe } from "@/lib/types";
+import { centeredMovingAverage, isStable } from "@/services/ai/smoothing";
 
 /**
  * Click-to-track subject tracking without an ML model: classic template
@@ -150,30 +151,39 @@ export function pathToKeyframes(
   if (points.length === 0) return [];
   const clamp1 = (v: number) => Math.min(1, Math.max(-1, v));
 
-  // EMA smoothing keeps the crop from jittering with the tracker. A
-  // higher alpha on confident frames keeps the crop responsive (low lag)
-  // while low-confidence frames barely nudge it so lost tracks don't drift.
-  let x = points[0].x;
-  let y = points[0].y;
-  const smoothed = points.map((p) => {
-    const a = p.confidence < COAST_BELOW ? 0.05 : 0.45;
-    x += (p.x - x) * a;
-    y += (p.y - y) * a;
-    return { ...p, x, y };
-  });
+  // trackPoint already coasts on low-confidence frames (holds the last
+  // good position), so the raw path is clean enough for a zero-lag
+  // centered moving average — no trailing/EMA lag.
+  const win = Math.max(3, Math.round(fps * 0.8));
+  const xs = centeredMovingAverage(points.map((p) => p.x), win);
+  const ys = centeredMovingAverage(points.map((p) => p.y), win);
+
+  // Near-still subject → one steady framing instead of animated jitter.
+  const stable =
+    isStable(xs, 0.06) && isStable(ys, 0.06);
+  const panX = (x: number) => clamp1((x - 0.5) * gainX);
+  const panY = (y: number) => clamp1((y - 0.5) * gainY);
+
+  if (stable) {
+    const avgX = xs.reduce((s, v) => s + v, 0) / xs.length;
+    const avgY = ys.reduce((s, v) => s + v, 0) / ys.length;
+    return [
+      { id: "trk-0", time: 0, zoom: 1, panX: panX(avgX), panY: panY(avgY) },
+    ];
+  }
 
   const keyframes: ZoomKeyframe[] = [];
   let nextTime = 0;
-  for (const p of smoothed) {
-    const t = p.frame / fps;
-    if (t + 1e-6 < nextTime) continue;
+  for (let i = 0; i < points.length; i++) {
+    const t = points[i].frame / fps;
+    if (i > 0 && t + 1e-6 < nextTime) continue;
     nextTime = t + interval;
     keyframes.push({
       id: `trk-${keyframes.length}`,
       time: Math.round(t * 100) / 100,
       zoom: 1,
-      panX: clamp1((p.x - 0.5) * gainX),
-      panY: clamp1((p.y - 0.5) * gainY),
+      panX: panX(xs[i]),
+      panY: panY(ys[i]),
     });
   }
 

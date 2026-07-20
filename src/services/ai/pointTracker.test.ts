@@ -68,7 +68,7 @@ describe("trackPoint", () => {
 });
 
 describe("pathToKeyframes", () => {
-  it("maps off-center positions to clamped pan keyframes", () => {
+  it("collapses a still off-center subject to one steady framing", () => {
     const points = Array.from({ length: 40 }, (_, f) => ({
       frame: f,
       x: 0.9,
@@ -76,11 +76,23 @@ describe("pathToKeyframes", () => {
       confidence: 0.9,
     }));
     const kfs = pathToKeyframes(points, 8, 2.9, 0);
-    expect(kfs.length).toBeGreaterThan(0);
-    const last = kfs[kfs.length - 1];
-    expect(last.panX).toBeGreaterThan(0.8); // pushed right, clamped ≤ 1
-    expect(last.panX).toBeLessThanOrEqual(1);
-    expect(last.panY).toBe(0); // no vertical slack → axis fixed
-    expect(kfs.every((k) => k.zoom === 1)).toBe(true);
+    expect(kfs).toHaveLength(1); // stable → single keyframe, no jitter
+    expect(kfs[0].panX).toBeGreaterThan(0.8); // pushed right, clamped ≤ 1
+    expect(kfs[0].panX).toBeLessThanOrEqual(1);
+    expect(kfs[0].panY).toBe(0); // no vertical slack → axis fixed
+    expect(kfs[0].zoom).toBe(1);
+  });
+
+  it("follows a moving subject with multiple keyframes", () => {
+    const points = Array.from({ length: 40 }, (_, f) => ({
+      frame: f,
+      x: 0.2 + (0.6 * f) / 39, // pans left → right
+      y: 0.5,
+      confidence: 0.9,
+    }));
+    const kfs = pathToKeyframes(points, 8, 2.9, 0);
+    expect(kfs.length).toBeGreaterThan(2);
+    // Pan increases monotonically as the subject moves right.
+    expect(kfs[kfs.length - 1].panX).toBeGreaterThan(kfs[0].panX);
   });
 });

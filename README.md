@@ -52,10 +52,17 @@ and OpenAI Whisper.
   with smoothstep-eased keyframes, volume, FFmpeg noise reduction
   (`afftdn`), loudness leveling (`loudnorm` to −14 LUFS), and background
   music with independent gain.
-- **Auto-reframe (motion tracking)**: model-free subject tracking — the
-  server frame-differences a tiny grayscale decode of the clip, smooths the
-  motion centroid with confidence-weighted EMA, and generates pan keyframes
-  that follow the action across the frame. One click in the Layout panel.
+- **Click-to-track subject tracking**: drop a dot on any person or object
+  in the preview and the 9:16 frame follows it through the clip. Model-free
+  template matching (patch SSD, tracked forward and backward from the dot,
+  coasting when the subject is briefly lost) generates pan keyframes that
+  keep the subject framed. The trajectory is smoothed with a **zero-lag
+  centered moving average** and a **stability test** (a near-still subject
+  gets one steady framing, not jitter) — techniques adapted from
+  OpenMontage's `auto_reframe`, reimplemented independently.
+- **Auto-reframe (motion tracking)**: no-dot alternative — the server
+  frame-differences a tiny grayscale decode of the clip and pans toward the
+  motion, for when you just want the action followed automatically.
 - **Undo/redo** across all creative edits (trims, styles, keyframes,
   stickers, transcript corrections) with burst-grouping so slider drags are
   one entry — `Ctrl/Cmd+Z`, `Ctrl/Cmd+Shift+Z`, or the header buttons.
@@ -155,6 +162,16 @@ Design notes:
 - YouTube ingest tries `@distube/ytdl-core` first and falls back to a
   system `yt-dlp` binary when present (`pip install yt-dlp`); with neither
   working it degrades to a clear "upload the file instead" error.
-- Auto-reframe tracks motion, not faces specifically — on static
-  talking-head footage it deliberately stays near center rather than
-  chasing noise. A face-detection model is the natural upgrade path.
+- Subject tracking uses template matching / motion, not a face model — it
+  follows whatever you dot, which also handles objects and products, not
+  just faces. A dedicated face detector (e.g. MediaPipe, as OpenMontage's
+  `face_tracker` uses) is the natural upgrade for auto-locking onto a
+  speaker without a click; it needs a bundled model this environment
+  can't fetch.
+
+## Credits
+
+Several trajectory-smoothing and reframing techniques were studied from
+[OpenMontage](https://github.com/calesthio/OpenMontage) (AGPLv3) and
+**reimplemented independently** in TypeScript — no OpenMontage source is
+included or copied, so ClipForge is not a derivative work of it.
