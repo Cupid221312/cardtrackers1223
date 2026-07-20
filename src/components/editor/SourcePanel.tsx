@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { clearEditHistory, useEditorStore } from "@/lib/store/editorStore";
 import TranscriptPanel from "@/components/editor/TranscriptPanel";
+import { GradeChips } from "@/components/editor/RatingBadges";
 import { findClips } from "@/services/ai/clipFinder";
 import { formatTime } from "@/lib/time";
 import type {
@@ -387,11 +388,16 @@ export default function SourcePanel() {
 
         <div className="mt-2.5 flex flex-col gap-1.5">
           {clips.map((clip) => (
-            <button
+            <div
               key={clip.id}
+              role="button"
+              tabIndex={0}
               onClick={() => store.getState().selectClip(clip.id)}
+              onKeyDown={(e) =>
+                e.key === "Enter" && store.getState().selectClip(clip.id)
+              }
               className={clsx(
-                "rounded-lg border px-2.5 py-2 text-left transition",
+                "cursor-pointer rounded-lg border px-2.5 py-2 text-left transition",
                 selectedClipId === clip.id
                   ? "border-accent/70 bg-accent/10 shadow-glow"
                   : "border-ink-700 bg-ink-900 hover:border-ink-500",
@@ -414,10 +420,22 @@ export default function SourcePanel() {
                   {clip.score}
                 </span>
               </div>
-              <p className="mt-0.5 text-[11px] text-slate-500">
-                {formatTime(clip.start)}–{formatTime(clip.end)} · {clip.reason}
-              </p>
-            </button>
+              <GradeChips rating={clip.rating} />
+              <div className="mt-1 flex items-center justify-between gap-2">
+                <p className="truncate text-[11px] text-slate-500">
+                  {formatTime(clip.start)}–{formatTime(clip.end)}
+                </p>
+                <button
+                  className="shrink-0 text-[10px] font-medium text-accent-glow hover:underline"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    store.getState().setDetailClip(clip.id);
+                  }}
+                >
+                  Details →
+                </button>
+              </div>
+            </div>
           ))}
           {clips.length === 0 && transcript && !detecting && (
             <p className="text-center text-xs text-slate-500">

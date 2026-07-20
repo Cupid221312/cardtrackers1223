@@ -18,7 +18,7 @@ import {
  * (`pip install yt-dlp`); the Docker image bundles it.
  */
 
-export type IngestPlatform = "youtube" | "twitch" | "kick" | "generic";
+export type IngestPlatform = "youtube" | "twitch" | "kick";
 
 export interface IngestResult {
   mediaId: string;
@@ -29,32 +29,44 @@ export interface IngestResult {
   platform: IngestPlatform;
 }
 
+/**
+ * Resolve the platform for a URL, or null if unsupported. Only an
+ * explicit allowlist of public video hosts over http(s) is accepted:
+ * handing arbitrary URLs to yt-dlp is an SSRF / local-file-read risk
+ * (file:// extractor, cloud metadata at 169.254.169.254, internal
+ * services), so unknown hosts are rejected rather than attempted.
+ */
 export function detectPlatform(rawUrl: string): IngestPlatform | null {
-  let host: string;
+  let parsed: URL;
   try {
-    host = new URL(rawUrl).hostname.toLowerCase().replace(/^www\./, "");
+    parsed = new URL(rawUrl);
   } catch {
     return null;
   }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
+  const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
   if (host === "youtube.com" || host === "youtu.be" || host.endsWith(".youtube.com")) {
     return "youtube";
   }
   if (host === "twitch.tv" || host.endsWith(".twitch.tv")) return "twitch";
   if (host === "kick.com" || host.endsWith(".kick.com")) return "kick";
-  // Anything else: let yt-dlp try (it supports 1000+ sites) but flag it.
-  return "generic";
+  return null;
 }
 
 const PLATFORM_LABEL: Record<IngestPlatform, string> = {
   youtube: "YouTube",
   twitch: "Twitch",
   kick: "Kick",
-  generic: "video",
 };
 
 export async function ingestFromUrl(url: string): Promise<IngestResult> {
   const platform = detectPlatform(url);
-  if (!platform) throw new IngestError("That doesn't look like a valid URL", 400);
+  if (!platform) {
+    throw new IngestError(
+      "Only YouTube, Twitch, and Kick links are supported. Paste a link from one of those, or upload the file directly.",
+      400,
+    );
+  }
 
   await ensureMediaDirs();
   const id = newMediaId();

@@ -23,6 +23,7 @@ import type {
 } from "@/lib/types";
 import { CAPTION_TEMPLATES } from "@/lib/captionTemplates";
 import { buildCaptionLines } from "@/services/ai/captions";
+import { overallScore, rateClip, sceneAnalysis } from "@/services/ai/rating";
 import { clamp } from "@/lib/time";
 
 interface EditorState {
@@ -68,7 +69,11 @@ interface EditorState {
   exportJobs: ExportJobInfo[];
   exportModalOpen: boolean;
 
+  /** Clip whose rating/analysis detail modal is open, or null. */
+  detailClipId: string | null;
+
   // ---- actions -------------------------------------------------------------
+  setDetailClip: (clipId: string | null) => void;
   setSource: (source: SourceMedia | null) => void;
   setIngesting: (v: boolean, error?: string) => void;
   setTranscribing: (v: boolean) => void;
@@ -188,6 +193,7 @@ export const useEditorStore = create<EditorState>()(
 
   exportJobs: [],
   exportModalOpen: false,
+  detailClipId: null,
 
   setSource: (source) =>
     set({
@@ -289,13 +295,21 @@ export const useEditorStore = create<EditorState>()(
     const start = Math.min(s.currentTime, Math.max(0, s.source.duration - 5));
     const end = Math.min(start + 30, s.source.duration);
     const manualCount = s.clips.filter((c) => c.id.startsWith("manual-")).length;
+    const rating = s.transcript
+      ? rateClip(s.transcript.segments, start, end)
+      : { hook: 50, flow: 50, value: 50, trend: 50 };
     const clip: ClipCandidate = {
       id: `manual-${Date.now()}`,
       title: `CUSTOM CLIP ${manualCount + 1}`,
       start,
       end,
-      score: 50,
+      score: overallScore(rating),
+      rating,
       reason: "Created manually",
+      sceneAnalysis: s.transcript
+        ? sceneAnalysis(s.transcript.segments, start, end)
+        : "",
+      keywords: [],
     };
     set({ clips: [...s.clips, clip].sort((a, b) => a.start - b.start) });
     get().selectClip(clip.id);
@@ -462,6 +476,7 @@ export const useEditorStore = create<EditorState>()(
   setTrackPicking: (trackPicking) => set({ trackPicking }),
 
   setExportModalOpen: (exportModalOpen) => set({ exportModalOpen }),
+  setDetailClip: (detailClipId) => set({ detailClipId }),
   upsertExportJob: (job) =>
     set((s) => {
       const idx = s.exportJobs.findIndex((j) => j.id === job.id);

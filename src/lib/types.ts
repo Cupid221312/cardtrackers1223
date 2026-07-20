@@ -43,16 +43,39 @@ export interface CaptionLine {
 // AI clip detection
 // ---------------------------------------------------------------------------
 
+/**
+ * Multi-axis virality rating (Opus-style). Each axis is 0..100; the overall
+ * `score` is their weighted blend. Letter grades are derived for display.
+ */
+export interface ClipRating {
+  /** Strength of the opening — does it stop the scroll in the first ~3s? */
+  hook: number;
+  /** Narrative/pacing coherence across the clip. */
+  flow: number;
+  /** Substance — a payoff, insight, or emotional peak worth watching. */
+  value: number;
+  /** Alignment with current short-form trends/formats. */
+  trend: number;
+}
+
+export type LetterGrade = "A+" | "A" | "A-" | "B+" | "B" | "B-" | "C+" | "C" | "D";
+
 export interface ClipCandidate {
   id: string;
   /** Punchy title used for the hook banner. */
   title: string;
   start: number;
   end: number;
-  /** 0..100 viral-potential score. */
+  /** 0..100 viral-potential score (weighted blend of the rating axes). */
   score: number;
+  /** Per-axis rating breakdown. */
+  rating: ClipRating;
   /** Human-readable explanation of why this range was picked. */
   reason: string;
+  /** One-paragraph description of what happens in the clip (scene analysis). */
+  sceneAnalysis: string;
+  /** Detected keyword tags for search/filtering. */
+  keywords: string[];
 }
 
 export interface ClipFinderSettings {
@@ -200,6 +223,52 @@ export interface SourceMedia {
   width: number;
   height: number;
   origin: "upload" | "youtube";
+}
+
+// ---------------------------------------------------------------------------
+// Automation: watch creators, auto-clip, auto-publish
+// ---------------------------------------------------------------------------
+
+export type SocialPlatform = "youtube" | "tiktok" | "instagram";
+export type SourcePlatform = "youtube" | "twitch" | "kick";
+
+/**
+ * A stored connection to a publishing platform. Tokens are what the user
+ * obtains from that platform's developer console after registering an app
+ * and completing OAuth — the app never fabricates them.
+ */
+export interface PlatformConnection {
+  platform: SocialPlatform;
+  /** Display handle/name the user connected. */
+  account: string;
+  /** True once a usable token is stored server-side. */
+  connected: boolean;
+  updatedAt: number;
+}
+
+/**
+ * An automation rule: watch a creator on a source platform, auto-clip new
+ * VODs above a score threshold, and publish the winners to social targets.
+ * A deployed worker polls source platforms and runs these; the app stores
+ * and displays them.
+ */
+export interface AutomationRule {
+  id: string;
+  enabled: boolean;
+  /** Where to watch for new content. */
+  sourcePlatform: SourcePlatform;
+  /** Creator handle / channel / URL to monitor. */
+  creator: string;
+  /** Only auto-publish clips scoring at or above this (0..100). */
+  minScore: number;
+  /** Max clips to publish per new video. */
+  maxClipsPerVideo: number;
+  captionTemplate: CaptionTemplateId;
+  /** Social platforms to publish the winning clips to. */
+  publishTo: SocialPlatform[];
+  createdAt: number;
+  /** Last time the worker acted on this rule (0 = never). */
+  lastRunAt: number;
 }
 
 // ---------------------------------------------------------------------------

@@ -4,6 +4,12 @@ import type {
   Transcript,
   TranscriptSegment,
 } from "@/lib/types";
+import {
+  extractKeywords,
+  overallScore,
+  rateClip,
+  sceneAnalysis,
+} from "@/services/ai/rating";
 
 /**
  * Heuristic viral-moment detector. Scores every transcript segment on
@@ -143,18 +149,26 @@ export function findClips(
     used.push([win.start, win.end]);
 
     const uniqueLabels = [...new Set(win.labels)];
+    const rating = rateClip(segments, win.start, win.end);
+    const clipText = segments
+      .filter((s) => s.end > win.start && s.start < win.end)
+      .map((s) => s.text)
+      .join(" ");
     clips.push({
       id: `clip-${clips.length}-${Math.round(win.start * 10)}`,
       title: makeTitle(seed.segment),
       start: win.start,
       end: win.end,
-      score: Math.min(99, Math.round(35 + win.score * 1.4)),
+      score: overallScore(rating),
+      rating,
       reason:
         uniqueLabels.length > 0
           ? `Detected: ${uniqueLabels.slice(0, 4).join(", ")}`
           : "Continuous high-energy speech",
+      sceneAnalysis: sceneAnalysis(segments, win.start, win.end),
+      keywords: extractKeywords(clipText),
     });
   }
 
-  return clips.sort((a, b) => a.start - b.start);
+  return clips.sort((a, b) => b.score - a.score);
 }

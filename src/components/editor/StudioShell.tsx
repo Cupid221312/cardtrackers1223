@@ -7,7 +7,9 @@ import PreviewCanvas from "@/components/editor/PreviewCanvas";
 import InspectorPanel from "@/components/editor/InspectorPanel";
 import Timeline from "@/components/timeline/Timeline";
 import ExportQueueModal from "@/components/editor/ExportQueueModal";
+import ClipDetailModal from "@/components/editor/ClipDetailModal";
 import ShortcutHelp from "@/components/editor/ShortcutHelp";
+import Link from "next/link";
 import { redoEdit, undoEdit, useEditorStore } from "@/lib/store/editorStore";
 import { useProjectAutosave } from "@/lib/store/useProjectAutosave";
 
@@ -41,6 +43,20 @@ export default function StudioShell() {
           <span className="text-sm font-bold tracking-tight text-white">
             ClipForge <span className="font-medium text-accent-glow">Studio</span>
           </span>
+          <nav className="ml-3 flex items-center gap-1 text-xs">
+            <Link
+              href="/dashboard"
+              className="rounded-md px-2 py-1 font-medium text-slate-400 transition hover:bg-ink-700 hover:text-white"
+            >
+              Dashboard
+            </Link>
+            <Link
+              href="/automations"
+              className="rounded-md px-2 py-1 font-medium text-slate-400 transition hover:bg-ink-700 hover:text-white"
+            >
+              Automations
+            </Link>
+          </nav>
         </div>
         <div className="flex items-center gap-1.5">
           <button
@@ -104,6 +120,7 @@ export default function StudioShell() {
       </footer>
 
       <ExportQueueModal />
+      <ClipDetailModal />
       <ShortcutHelp />
     </div>
   );

@@ -54,6 +54,23 @@ describe("findClips", () => {
       expect(clip.end - clip.start).toBeLessThanOrEqual(40.01);
       expect(clip.score).toBeGreaterThan(0);
       expect(clip.title.length).toBeGreaterThan(0);
+      // Rating axes are populated and in range.
+      for (const axis of [clip.rating.hook, clip.rating.flow, clip.rating.value, clip.rating.trend]) {
+        expect(axis).toBeGreaterThanOrEqual(0);
+        expect(axis).toBeLessThanOrEqual(99);
+      }
+      expect(clip.sceneAnalysis.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("ranks clips by score, highest first", () => {
+    const clips = findClips(makeTranscript(HOOKY), {
+      minDuration: 15,
+      maxDuration: 30,
+      maxClips: 5,
+    });
+    for (let i = 1; i < clips.length; i++) {
+      expect(clips[i].score).toBeLessThanOrEqual(clips[i - 1].score);
     }
   });
 
