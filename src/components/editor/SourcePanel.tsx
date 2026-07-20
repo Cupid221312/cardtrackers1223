@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useEditorStore } from "@/lib/store/editorStore";
+import { clearEditHistory, useEditorStore } from "@/lib/store/editorStore";
 import TranscriptPanel from "@/components/editor/TranscriptPanel";
 import { findClips } from "@/services/ai/clipFinder";
 import { formatTime } from "@/lib/time";
@@ -52,6 +52,7 @@ export default function SourcePanel() {
         origin: "upload",
       };
       s.setSource(media);
+      clearEditHistory(); // new session — old edits must not be undoable
       s.setIngesting(false);
       void transcribe(media);
     } catch (err) {
@@ -81,6 +82,7 @@ export default function SourcePanel() {
         origin: "youtube",
       };
       s.setSource(media);
+      clearEditHistory(); // new session — old edits must not be undoable
       s.setIngesting(false);
       void transcribe(media);
     } catch (err) {

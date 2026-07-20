@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { temporal } from "zundo";
 import type {
   AudioSettings,
   CaptionLine,
@@ -90,6 +91,8 @@ interface EditorState {
   removeSticker: (id: string) => void;
   addKeyframe: (clipId: string, kf: ZoomKeyframe) => void;
   removeKeyframe: (clipId: string, kfId: string) => void;
+  /** Replace a clip's whole keyframe track (auto-reframe, clear). */
+  setKeyframes: (clipId: string, kfs: ZoomKeyframe[]) => void;
 
   setPxPerSec: (v: number) => void;
 
@@ -114,9 +117,24 @@ const DEFAULT_AUDIO: AudioSettings = {
   musicVolume: 0.15,
 };
 
+/** Slice of state covered by undo/redo (creative decisions only). */
+interface UndoableSlice {
+  transcript: EditorState["transcript"];
+  captionLines: EditorState["captionLines"];
+  clips: EditorState["clips"];
+  captionStyle: EditorState["captionStyle"];
+  hookBanner: EditorState["hookBanner"];
+  framing: EditorState["framing"];
+  filters: EditorState["filters"];
+  audio: EditorState["audio"];
+  stickers: EditorState["stickers"];
+  keyframesByClip: EditorState["keyframesByClip"];
+}
+
 export const useEditorStore = create<EditorState>()(
-  persist(
-    (set, get) => ({
+  temporal(
+    persist(
+      (set, get) => ({
   source: null,
   ingesting: false,
   ingestError: "",
@@ -317,6 +335,14 @@ export const useEditorStore = create<EditorState>()(
       },
     })),
 
+  setKeyframes: (clipId, kfs) =>
+    set((s) => ({
+      keyframesByClip: {
+        ...s.keyframesByClip,
+        [clipId]: [...kfs].sort((a, b) => a.time - b.time),
+      },
+    })),
+
   setPxPerSec: (v) => set({ pxPerSec: clamp(v, 2, 120) }),
 
   setExportModalOpen: (exportModalOpen) => set({ exportModalOpen }),
@@ -365,9 +391,54 @@ export const useEditorStore = create<EditorState>()(
           audio: { ...current.audio, ...p.audio },
         };
       },
+      },
+    ),
+    {
+      limit: 100,
+      partialize: (s): UndoableSlice => ({
+        transcript: s.transcript,
+        captionLines: s.captionLines,
+        clips: s.clips,
+        captionStyle: s.captionStyle,
+        hookBanner: s.hookBanner,
+        framing: s.framing,
+        filters: s.filters,
+        audio: s.audio,
+        stickers: s.stickers,
+        keyframesByClip: s.keyframesByClip,
+      }),
+      // Updates are immutable, so reference-shallow equality is exact and
+      // cheap; playback ticks (currentTime) never touch these fields, so
+      // history only grows on real edits.
+      equality: (past, current) =>
+        (Object.keys(current) as Array<keyof UndoableSlice>).every(
+          (k) => past[k] === current[k],
+        ),
+      // Group bursts (slider drags, karaoke retimes) into one undo entry.
+      handleSet: (handleSet) => {
+        let last = 0;
+        return (...args: Parameters<typeof handleSet>) => {
+          const now = Date.now();
+          if (now - last < 350) return;
+          last = now;
+          handleSet(...args);
+        };
+      },
     },
   ),
 );
+
+/** Imperative undo/redo helpers (also bound to Ctrl/Cmd+Z). */
+export function undoEdit() {
+  useEditorStore.temporal.getState().undo();
+}
+export function redoEdit() {
+  useEditorStore.temporal.getState().redo();
+}
+/** Wipe history — called when a brand-new source replaces the session. */
+export function clearEditHistory() {
+  useEditorStore.temporal.getState().clear();
+}
 
 /** The currently selected clip object, or null. */
 export function useSelectedClip() {

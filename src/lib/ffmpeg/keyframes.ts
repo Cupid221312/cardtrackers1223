@@ -39,6 +39,27 @@ export function keyframeExpr(
  * 1080x1920 stream. x/y center the crop window, then offset it by the
  * pan fraction of the available slack — matching the static crop math.
  */
+/**
+ * Pan-only animation (every keyframe at zoom 1): an animated crop over the
+ * cover-scaled source. Unlike zoompan — which can only look inside the
+ * already-cropped 9:16 frame — this pans the crop window across the FULL
+ * source width/height, which is what auto-reframe needs. crop evaluates
+ * x/y per frame with `t` in seconds (0 at the clip start post-trim).
+ */
+export function animatedCropFilter(
+  keyframes: ZoomKeyframe[],
+  width: number,
+  height: number,
+): string {
+  const px = keyframeExpr(keyframes, "panX", "t");
+  const py = keyframeExpr(keyframes, "panY", "t");
+  return (
+    `crop=${width}:${height}` +
+    `:x='(iw-${width})/2+(${px})*(iw-${width})/2'` +
+    `:y='(ih-${height})/2+(${py})*(ih-${height})/2'`
+  );
+}
+
 export function zoompanFilter(
   keyframes: ZoomKeyframe[],
   width: number,

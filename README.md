@@ -36,6 +36,13 @@ and OpenAI Whisper.
   with smoothstep-eased keyframes, volume, FFmpeg noise reduction
   (`afftdn`), loudness leveling (`loudnorm` to −14 LUFS), and background
   music with independent gain.
+- **Auto-reframe (motion tracking)**: model-free subject tracking — the
+  server frame-differences a tiny grayscale decode of the clip, smooths the
+  motion centroid with confidence-weighted EMA, and generates pan keyframes
+  that follow the action across the frame. One click in the Layout panel.
+- **Undo/redo** across all creative edits (trims, styles, keyframes,
+  stickers, transcript corrections) with burst-grouping so slider drags are
+  one entry — `Ctrl/Cmd+Z`, `Ctrl/Cmd+Shift+Z`, or the header buttons.
 - **Keyboard**: `Space` play/pause · `←/→` seek 1 s (`Shift` = 5 s) ·
   `I`/`O` trim the selected clip's in/out point to the playhead.
 - Styling and finder settings **persist across reloads** (localStorage);
@@ -50,10 +57,11 @@ and OpenAI Whisper.
   title unless you wrote a custom banner). Captions and the hook banner are
   burned in via a generated ASS subtitle track (one dialogue event per word
   for exact karaoke highlighting); zoom/pan keyframes are compiled into
-  animated `zoompan` expressions with the same smoothstep easing as the
-  preview; stickers, filters, framing, and the full audio chain are
-  composed in a single filter graph. Jobs report live progress parsed from
-  FFmpeg output.
+  animated FFmpeg expressions with the same smoothstep easing as the
+  preview — pan-only paths (auto-reframe) become an animated `crop` that
+  travels the full source width, zoom paths become `zoompan` punch-ins;
+  stickers, filters, framing, and the full audio chain are composed in a
+  single filter graph. Jobs report live progress parsed from FFmpeg output.
 
 ## Getting started
 
@@ -114,8 +122,9 @@ Design notes:
 
 ## Current limitations
 
-- YouTube ingest depends on `@distube/ytdl-core`, which can lag YouTube
-  player changes; failures degrade to a clear "upload the file instead"
-  error.
-- Face-tracking auto-reframe is not implemented; manual pan/zoom framing
-  and keyframes are.
+- YouTube ingest tries `@distube/ytdl-core` first and falls back to a
+  system `yt-dlp` binary when present (`pip install yt-dlp`); with neither
+  working it degrades to a clear "upload the file instead" error.
+- Auto-reframe tracks motion, not faces specifically — on static
+  talking-head footage it deliberately stays near center rather than
+  chasing noise. A face-detection model is the natural upgrade path.

@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect } from "react";
+import { useStore } from "zustand";
 import SourcePanel from "@/components/editor/SourcePanel";
 import PreviewCanvas from "@/components/editor/PreviewCanvas";
 import InspectorPanel from "@/components/editor/InspectorPanel";
 import Timeline from "@/components/timeline/Timeline";
 import ExportQueueModal from "@/components/editor/ExportQueueModal";
-import { useEditorStore } from "@/lib/store/editorStore";
+import { redoEdit, undoEdit, useEditorStore } from "@/lib/store/editorStore";
 
 export default function StudioShell() {
   // Persisted styling settings are rehydrated after mount (skipHydration
@@ -18,6 +19,8 @@ export default function StudioShell() {
   const setExportModalOpen = useEditorStore((s) => s.setExportModalOpen);
   const hasSource = useEditorStore((s) => s.source !== null);
   const jobs = useEditorStore((s) => s.exportJobs);
+  const canUndo = useStore(useEditorStore.temporal, (s) => s.pastStates.length > 0);
+  const canRedo = useStore(useEditorStore.temporal, (s) => s.futureStates.length > 0);
   const activeJobs = jobs.filter(
     (j) => j.status === "queued" || j.status === "processing",
   ).length;
@@ -36,11 +39,34 @@ export default function StudioShell() {
             ClipForge <span className="font-medium text-accent-glow">Studio</span>
           </span>
         </div>
-        <button
-          className="btn-primary relative flex items-center gap-2 !py-1.5"
-          onClick={() => setExportModalOpen(true)}
-          disabled={!hasSource}
-        >
+        <div className="flex items-center gap-1.5">
+          <button
+            className="btn-ghost !px-2.5 !py-1.5"
+            onClick={undoEdit}
+            disabled={!canUndo}
+            title="Undo (Ctrl+Z)"
+            aria-label="Undo"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current">
+              <path d="M7.83 11H14a5 5 0 0 1 0 10h-3a1 1 0 1 1 0-2h3a3 3 0 0 0 0-6H7.83l2.58 2.59a1 1 0 1 1-1.41 1.41l-4.3-4.29a1 1 0 0 1 0-1.42l4.3-4.29a1 1 0 0 1 1.41 1.41L7.83 11Z" />
+            </svg>
+          </button>
+          <button
+            className="btn-ghost !px-2.5 !py-1.5"
+            onClick={redoEdit}
+            disabled={!canRedo}
+            title="Redo (Ctrl+Shift+Z)"
+            aria-label="Redo"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4 scale-x-[-1] fill-current">
+              <path d="M7.83 11H14a5 5 0 0 1 0 10h-3a1 1 0 1 1 0-2h3a3 3 0 0 0 0-6H7.83l2.58 2.59a1 1 0 1 1-1.41 1.41l-4.3-4.29a1 1 0 0 1 0-1.42l4.3-4.29a1 1 0 0 1 1.41 1.41L7.83 11Z" />
+            </svg>
+          </button>
+          <button
+            className="btn-primary relative ml-1.5 flex items-center gap-2 !py-1.5"
+            onClick={() => setExportModalOpen(true)}
+            disabled={!hasSource}
+          >
           <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current">
             <path d="M12 3a1 1 0 0 1 1 1v9.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-5 5a1 1 0 0 1-1.4 0l-5-5a1 1 0 1 1 1.4-1.4l3.3 3.3V4a1 1 0 0 1 1-1Zm-7 15a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H6a1 1 0 0 1-1-1Z" />
           </svg>
@@ -50,7 +76,8 @@ export default function StudioShell() {
               {activeJobs}
             </span>
           )}
-        </button>
+          </button>
+        </div>
       </header>
 
       {/* ---- main workspace ---------------------------------------------- */}

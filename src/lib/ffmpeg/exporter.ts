@@ -4,7 +4,7 @@ import os from "os";
 import crypto from "crypto";
 import type { ExportJobInfo, ExportPreset, ExportRequest } from "@/lib/types";
 import { buildAssDocument } from "@/lib/ffmpeg/ass";
-import { zoompanFilter } from "@/lib/ffmpeg/keyframes";
+import { animatedCropFilter, zoompanFilter } from "@/lib/ffmpeg/keyframes";
 import {
   EXPORT_DIR,
   ensureMediaDirs,
@@ -173,10 +173,16 @@ function buildArgs(opts: {
   const clipDur = clip.end - clip.start;
   const p = PRESETS[preset];
 
-  // With keyframes, framing animates via zoompan on the composed 9:16
-  // stream (matching the preview, where keyframes replace base framing);
-  // the static framing step then runs at zoom=1 / no pan.
+  // With keyframes, framing animates (keyframes replace base framing,
+  // matching the preview) and the static framing step runs at zoom=1 /
+  // no pan. Pan-only crop keyframes (auto-reframe) use an animated crop
+  // across the full source; anything with zoom animation uses zoompan on
+  // the composed 9:16 stream.
   const animated = request.keyframes.length > 0;
+  const panOnlyCrop =
+    animated &&
+    request.framing.mode === "crop" &&
+    request.keyframes.every((k) => k.zoom === 1);
   const framing = animated
     ? { ...request.framing, zoom: 1, panX: 0, panY: 0 }
     : request.framing;
@@ -204,6 +210,13 @@ function buildArgs(opts: {
       `[fgsrc]scale=${fgW}:-2,${eq}[fg]`,
       `[bg][fg]overlay=x=(W-w)/2-(${(framing.panX * 0.12).toFixed(4)}*W):y=(H-h)/2-(${(framing.panY * 0.12).toFixed(4)}*H)[framed]`,
     );
+  } else if (panOnlyCrop) {
+    // Cover-scale without cropping, then pan an animated 1080x1920 crop
+    // window across the whole frame following the keyframe path.
+    chains.push(
+      `[0:v]scale=${OUT_W}:${OUT_H}:force_original_aspect_ratio=increase,` +
+        `${animatedCropFilter(request.keyframes, OUT_W, OUT_H)},${eq}[framed]`,
+    );
   } else {
     // Cover-crop: upscale so the frame is filled at the requested zoom,
     // then crop a 1080x1920 window offset by the pan.
@@ -217,7 +230,7 @@ function buildArgs(opts: {
   }
 
   let vLabel = "framed";
-  if (animated) {
+  if (animated && !panOnlyCrop) {
     // Constant 60fps in, one output frame per input frame — `on/60` is
     // wall time, which the keyframe expressions expect.
     chains.push(

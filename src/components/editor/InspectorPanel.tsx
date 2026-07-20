@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import {
   useEditorStore,
   useSelectedClip,
@@ -81,10 +81,39 @@ export default function InspectorPanel() {
   const clip = useSelectedClip();
   const keyframes = useSelectedClipKeyframes();
   const currentTime = useEditorStore((s) => s.currentTime);
+  const source = useEditorStore((s) => s.source);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const musicInputRef = useRef<HTMLInputElement>(null);
+  const [reframing, setReframing] = useState(false);
+  const [reframeNote, setReframeNote] = useState("");
 
   const st = () => useEditorStore.getState();
+
+  async function autoReframe() {
+    if (!source || !clip) return;
+    setReframing(true);
+    setReframeNote("");
+    try {
+      const res = await fetch(`/api/media/${source.mediaId}/reframe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ start: clip.start, end: clip.end }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body?.error ?? "Auto-reframe failed");
+      st().updateFraming({ mode: "crop", zoom: 1, panX: 0, panY: 0 });
+      st().setKeyframes(clip.id, body.keyframes);
+      setReframeNote(
+        body.confidence < 0.2
+          ? "Low motion detected — framing kept near center."
+          : `Tracked motion → ${body.keyframes.length} pan keyframes.`,
+      );
+    } catch (err) {
+      setReframeNote(err instanceof Error ? err.message : "Auto-reframe failed");
+    } finally {
+      setReframing(false);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -272,6 +301,18 @@ export default function InspectorPanel() {
             />
           )}
         </div>
+
+        <button
+          className="btn-ghost mt-2.5 w-full !py-1.5 text-xs"
+          onClick={autoReframe}
+          disabled={!clip || !source || reframing}
+          title="Track motion across the clip and generate pan keyframes"
+        >
+          {reframing ? "Analyzing motion…" : "✦ Auto-reframe (motion tracking)"}
+        </button>
+        {reframeNote && (
+          <p className="mt-1.5 text-[11px] text-slate-500">{reframeNote}</p>
+        )}
 
         {/* keyframes */}
         <div className="mt-3 border-t border-ink-700 pt-2.5">

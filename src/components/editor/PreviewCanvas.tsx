@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   interpolateKeyframes,
+  redoEdit,
+  undoEdit,
   useEditorStore,
   useSelectedClip,
   useSelectedClipKeyframes,
@@ -124,7 +126,11 @@ export default function PreviewCanvas() {
       if (["INPUT", "TEXTAREA"].includes(target.tagName) || target.isContentEditable)
         return;
       const s = useEditorStore.getState();
-      if (e.code === "Space") {
+      if ((e.ctrlKey || e.metaKey) && e.code === "KeyZ") {
+        e.preventDefault();
+        if (e.shiftKey) redoEdit();
+        else undoEdit();
+      } else if (e.code === "Space") {
         e.preventDefault();
         togglePlay();
       } else if (e.code === "ArrowLeft" || e.code === "ArrowRight") {
