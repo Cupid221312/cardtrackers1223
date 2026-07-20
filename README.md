@@ -28,21 +28,32 @@ and OpenAI Whisper.
   update instantly because they derive from the same word objects.
 - **Multi-track timeline** (video / audio / text) with click-and-drag
   scrubbing, trim handles on the selected clip, drag-to-slide clip windows,
-  and drag-to-retime caption lines. Zoomable px-per-second scale.
+  and drag-to-retime caption lines. Zoomable px-per-second scale, real
+  filmstrip thumbnails and a real decoded audio waveform (both generated
+  server-side per media and cached), and auto-follow of the playhead during
+  playback.
 - **Inspector**: brightness/contrast/saturation, background blur, zoom/pan
-  with smoothstep-eased keyframes (preview), volume, FFmpeg noise reduction
+  with smoothstep-eased keyframes, volume, FFmpeg noise reduction
   (`afftdn`), loudness leveling (`loudnorm` to −14 LUFS), and background
   music with independent gain.
+- **Keyboard**: `Space` play/pause · `←/→` seek 1 s (`Shift` = 5 s) ·
+  `I`/`O` trim the selected clip's in/out point to the playhead.
+- Styling and finder settings **persist across reloads** (localStorage);
+  media and jobs stay session-scoped.
 
 **Export**
 
 - **Export Queue** modal renders clips server-side with FFmpeg at
   1080×1920 · 60 fps (H.264 + AAC, `+faststart`) with presets for TikTok,
-  YouTube Shorts, and Instagram Reels. Captions and the hook banner are
+  YouTube Shorts, and Instagram Reels — one click renders the selected
+  clip, or **batch-render every detected clip** (each with its own hook
+  title unless you wrote a custom banner). Captions and the hook banner are
   burned in via a generated ASS subtitle track (one dialogue event per word
-  for exact karaoke highlighting); stickers, filters, framing, and the full
-  audio chain are composed in a single filter graph. Jobs report live
-  progress parsed from FFmpeg output.
+  for exact karaoke highlighting); zoom/pan keyframes are compiled into
+  animated `zoompan` expressions with the same smoothstep easing as the
+  preview; stickers, filters, framing, and the full audio chain are
+  composed in a single filter graph. Jobs report live progress parsed from
+  FFmpeg output.
 
 ## Getting started
 
@@ -103,11 +114,8 @@ Design notes:
 
 ## Current limitations
 
-- Zoom/pan **keyframes animate in the preview**; exports currently bake the
-  base framing (static zoom/pan). Keyframed `zoompan` in the FFmpeg graph is
-  the next milestone.
-- The timeline waveform is a deterministic placeholder, not decoded audio.
 - YouTube ingest depends on `@distube/ytdl-core`, which can lag YouTube
   player changes; failures degrade to a clear "upload the file instead"
   error.
-- Face-tracking auto-reframe is not implemented; manual pan/zoom framing is.
+- Face-tracking auto-reframe is not implemented; manual pan/zoom framing
+  and keyframes are.

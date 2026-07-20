@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useEditorStore, useSelectedClip } from "@/lib/store/editorStore";
 import TimeRuler from "@/components/timeline/TimeRuler";
 import VideoTrack from "@/components/timeline/VideoTrack";
@@ -20,11 +20,26 @@ export default function Timeline() {
   const source = useEditorStore((s) => s.source);
   const pxPerSec = useEditorStore((s) => s.pxPerSec);
   const currentTime = useEditorStore((s) => s.currentTime);
+  const playing = useEditorStore((s) => s.playing);
   const clip = useSelectedClip();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const duration = source?.duration ?? 0;
   const contentWidth = Math.max(200, duration * pxPerSec);
+
+  // Follow the playhead during playback (only then, so manual browsing
+  // never fights the auto-scroll).
+  useEffect(() => {
+    if (!playing) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    const playheadX = TRACK_LABEL_WIDTH + currentTime * pxPerSec;
+    const viewLeft = el.scrollLeft + TRACK_LABEL_WIDTH;
+    const viewRight = el.scrollLeft + el.clientWidth - 60;
+    if (playheadX < viewLeft || playheadX > viewRight) {
+      el.scrollLeft = Math.max(0, playheadX - el.clientWidth * 0.3);
+    }
+  }, [currentTime, playing, pxPerSec]);
 
   const timeFromEvent = useCallback(
     (clientX: number) => {

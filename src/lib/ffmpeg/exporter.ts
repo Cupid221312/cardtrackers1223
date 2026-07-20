@@ -4,6 +4,7 @@ import os from "os";
 import crypto from "crypto";
 import type { ExportJobInfo, ExportPreset, ExportRequest } from "@/lib/types";
 import { buildAssDocument } from "@/lib/ffmpeg/ass";
+import { zoompanFilter } from "@/lib/ffmpeg/keyframes";
 import {
   EXPORT_DIR,
   ensureMediaDirs,
@@ -168,9 +169,17 @@ function buildArgs(opts: {
   outPath: string;
 }): string[] {
   const { request, sourcePath, assPath, stickerPaths, musicPath, outPath } = opts;
-  const { framing, filters, audio, clip, preset } = request;
+  const { filters, audio, clip, preset } = request;
   const clipDur = clip.end - clip.start;
   const p = PRESETS[preset];
+
+  // With keyframes, framing animates via zoompan on the composed 9:16
+  // stream (matching the preview, where keyframes replace base framing);
+  // the static framing step then runs at zoom=1 / no pan.
+  const animated = request.keyframes.length > 0;
+  const framing = animated
+    ? { ...request.framing, zoom: 1, panX: 0, panY: 0 }
+    : request.framing;
 
   const args: string[] = [
     "-ss", clip.start.toFixed(3),
@@ -208,6 +217,14 @@ function buildArgs(opts: {
   }
 
   let vLabel = "framed";
+  if (animated) {
+    // Constant 60fps in, one output frame per input frame — `on/60` is
+    // wall time, which the keyframe expressions expect.
+    chains.push(
+      `[${vLabel}]fps=${OUT_FPS},${zoompanFilter(request.keyframes, OUT_W, OUT_H, OUT_FPS)}[zoomed]`,
+    );
+    vLabel = "zoomed";
+  }
   request.stickers.forEach((sticker, i) => {
     if (i >= stickerPaths.length) return;
     const w = Math.max(16, Math.round(sticker.scale * OUT_W));

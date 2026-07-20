@@ -14,10 +14,14 @@ import ffprobeInstaller from "@ffprobe-installer/ffprobe";
 const DATA_ROOT = path.join(process.cwd(), ".data");
 export const UPLOAD_DIR = path.join(DATA_ROOT, "uploads");
 export const EXPORT_DIR = path.join(DATA_ROOT, "exports");
+/** Derived artifacts (waveform peaks, filmstrip thumbnails). Kept separate
+ *  from UPLOAD_DIR so findMediaPath's `${id}.` prefix scan can't match them. */
+export const CACHE_DIR = path.join(DATA_ROOT, "cache");
 
 export async function ensureMediaDirs(): Promise<void> {
   await fs.mkdir(UPLOAD_DIR, { recursive: true });
   await fs.mkdir(EXPORT_DIR, { recursive: true });
+  await fs.mkdir(CACHE_DIR, { recursive: true });
 }
 
 export function newMediaId(): string {
@@ -107,6 +111,36 @@ export function probeMedia(filePath: string): Promise<MediaProbe> {
       } catch (e) {
         reject(e);
       }
+    });
+  });
+}
+
+/** Run ffmpeg and capture bounded stdout (e.g. raw PCM for waveforms). */
+export function runFfmpegCapture(
+  args: string[],
+  maxBytes = 128 * 1024 * 1024,
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(ffmpegPath(), ["-hide_banner", ...args]);
+    const chunks: Buffer[] = [];
+    let total = 0;
+    let errTail = "";
+    proc.stdout.on("data", (d: Buffer) => {
+      total += d.length;
+      if (total > maxBytes) {
+        proc.kill("SIGKILL");
+        reject(new Error("ffmpeg output exceeded capture limit"));
+        return;
+      }
+      chunks.push(d);
+    });
+    proc.stderr.on("data", (d: Buffer) => {
+      errTail = (errTail + d.toString()).slice(-2000);
+    });
+    proc.on("error", reject);
+    proc.on("close", (code) => {
+      if (code === 0) resolve(Buffer.concat(chunks));
+      else reject(new Error(`ffmpeg exited with ${code}: …${errTail.slice(-400)}`));
     });
   });
 }

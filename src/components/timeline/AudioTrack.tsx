@@ -1,13 +1,12 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useEditorStore } from "@/lib/store/editorStore";
 import TrackShell from "@/components/timeline/TrackShell";
 
 /**
- * Audio track with a deterministic pseudo-waveform (seeded by bar index) —
- * a real decoded waveform is on the roadmap; the lane, scale, and scrub
- * behavior are already final.
+ * Audio track rendering the source's real amplitude envelope (decoded
+ * server-side via /api/media/[id]/waveform) as one mirrored SVG path.
  */
 export default function AudioTrack({
   labelWidth,
@@ -20,20 +19,44 @@ export default function AudioTrack({
   const pxPerSec = useEditorStore((s) => s.pxPerSec);
   const volume = useEditorStore((s) => s.audio.volume);
   const musicName = useEditorStore((s) => s.audio.musicName);
+  const [peaks, setPeaks] = useState<number[] | null>(null);
+
+  const mediaId = source?.mediaId ?? "";
+  useEffect(() => {
+    if (!mediaId) {
+      setPeaks(null);
+      return;
+    }
+    let cancelled = false;
+    setPeaks(null);
+    fetch(`/api/media/${mediaId}/waveform`)
+      .then((res) => (res.ok ? res.json() : { peaks: [] }))
+      .then((body) => {
+        if (!cancelled) setPeaks(Array.isArray(body.peaks) ? body.peaks : []);
+      })
+      .catch(() => {
+        if (!cancelled) setPeaks([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mediaId]);
 
   const duration = source?.duration ?? 0;
   const width = duration * pxPerSec;
-  const barW = 3;
-  const barCount = Math.max(0, Math.floor(width / barW));
+  const gain = Math.min(1, volume);
 
-  const bars = useMemo(() => {
-    // Cheap deterministic "waveform": layered sines with index-hash jitter.
-    return Array.from({ length: barCount }, (_, i) => {
-      const h = Math.abs(Math.sin(i * 0.31) * 0.6 + Math.sin(i * 0.077) * 0.4);
-      const jitter = ((i * 2654435761) % 97) / 97;
-      return 0.15 + 0.85 * (h * 0.7 + jitter * 0.3);
-    });
-  }, [barCount]);
+  // One mirrored bar per peak in a 0..N x 0..100 viewBox, stretched to the
+  // lane width — a single DOM node regardless of zoom level.
+  const pathD = useMemo(() => {
+    if (!peaks || peaks.length === 0) return "";
+    const parts: string[] = [];
+    for (let i = 0; i < peaks.length; i++) {
+      const h = Math.max(1.5, peaks[i] * gain * 46);
+      parts.push(`M${i + 0.5} ${50 - h}V${50 + h}`);
+    }
+    return parts.join("");
+  }, [peaks, gain]);
 
   return (
     <TrackShell
@@ -45,20 +68,30 @@ export default function AudioTrack({
     >
       {source && (
         <div
-          className="pointer-events-none absolute inset-y-1.5 flex items-center gap-0 overflow-hidden rounded-md bg-brand-green/10"
+          className="pointer-events-none absolute inset-y-1.5 overflow-hidden rounded-md bg-brand-green/10"
           style={{ left: 0, width }}
         >
-          {bars.map((h, i) => (
-            <div
-              key={i}
-              className="shrink-0 rounded-full bg-brand-green/70"
-              style={{
-                width: 1.5,
-                marginLeft: barW - 1.5,
-                height: `${h * Math.min(1, volume) * 88}%`,
-              }}
-            />
-          ))}
+          {peaks === null ? (
+            <div className="flex h-full items-center px-2 text-[9px] uppercase tracking-wider text-brand-green/50">
+              Decoding waveform…
+            </div>
+          ) : pathD ? (
+            <svg
+              className="h-full w-full"
+              viewBox={`0 0 ${peaks.length} 100`}
+              preserveAspectRatio="none"
+            >
+              <path
+                d={pathD}
+                stroke="#2dd4a0"
+                strokeOpacity={0.75}
+                strokeWidth={0.6}
+                vectorEffect="non-scaling-stroke"
+              />
+            </svg>
+          ) : (
+            <div className="absolute inset-x-0 top-1/2 h-px bg-brand-green/40" />
+          )}
         </div>
       )}
       {musicName && source && (

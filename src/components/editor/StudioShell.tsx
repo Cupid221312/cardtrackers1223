@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import SourcePanel from "@/components/editor/SourcePanel";
 import PreviewCanvas from "@/components/editor/PreviewCanvas";
 import InspectorPanel from "@/components/editor/InspectorPanel";
@@ -8,6 +9,12 @@ import ExportQueueModal from "@/components/editor/ExportQueueModal";
 import { useEditorStore } from "@/lib/store/editorStore";
 
 export default function StudioShell() {
+  // Persisted styling settings are rehydrated after mount (skipHydration
+  // in the store) so SSR markup and the first client render agree.
+  useEffect(() => {
+    void useEditorStore.persist.rehydrate();
+  }, []);
+
   const setExportModalOpen = useEditorStore((s) => s.setExportModalOpen);
   const hasSource = useEditorStore((s) => s.source !== null);
   const jobs = useEditorStore((s) => s.exportJobs);

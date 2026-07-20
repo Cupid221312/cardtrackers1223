@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useEditorStore, useSelectedClip } from "@/lib/store/editorStore";
 import { linesInRange } from "@/services/ai/captions";
-import type { ExportPreset, ExportRequest } from "@/lib/types";
+import type { ClipCandidate, ExportPreset, ExportRequest } from "@/lib/types";
 import { formatTime } from "@/lib/time";
 import clsx from "clsx";
 
@@ -19,6 +19,7 @@ export default function ExportQueueModal() {
   const jobs = useEditorStore((s) => s.exportJobs);
   const clip = useSelectedClip();
   const source = useEditorStore((s) => s.source);
+  const clipCount = useEditorStore((s) => s.clips.length);
   const [preset, setPreset] = useState<ExportPreset>("tiktok");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -47,51 +48,79 @@ export default function ExportQueueModal() {
 
   if (!open) return null;
 
-  async function startExport() {
+  function buildPayload(target: ClipCandidate): ExportRequest {
     const s = useEditorStore.getState();
+    if (!s.source) throw new Error("No source media");
+    return {
+      mediaId: s.source.mediaId,
+      preset,
+      clip: { title: target.title, start: target.start, end: target.end },
+      captions: {
+        lines: linesInRange(s.captionLines, target.start, target.end),
+        style: s.captionStyle,
+      },
+      // In batch mode each clip gets its own hook title unless the user
+      // wrote a custom banner, which then applies everywhere.
+      hookBanner: s.hookBannerEdited
+        ? s.hookBanner
+        : { ...s.hookBanner, text: target.title },
+      framing: s.framing,
+      filters: s.filters,
+      keyframes: s.keyframesByClip[target.id] ?? [],
+      audio: {
+        volume: s.audio.volume,
+        noiseReduction: s.audio.noiseReduction,
+        volumeLeveling: s.audio.volumeLeveling,
+        musicMediaId: s.audio.musicMediaId,
+        musicVolume: s.audio.musicVolume,
+      },
+      stickers: s.stickers.map((st) => ({
+        dataUrl: st.dataUrl,
+        x: st.x,
+        y: st.y,
+        scale: st.scale,
+        opacity: st.opacity,
+      })),
+      sourceWidth: s.source.width,
+      sourceHeight: s.source.height,
+    };
+  }
+
+  async function submitClip(target: ClipCandidate) {
+    const res = await fetch("/api/export", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildPayload(target)),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body?.error ?? "Export failed to start");
+    useEditorStore.getState().upsertExportJob(body.job);
+  }
+
+  async function startExport() {
     if (!source || !clip) return;
     setSubmitting(true);
     setError("");
     try {
-      const payload: ExportRequest = {
-        mediaId: source.mediaId,
-        preset,
-        clip: { title: clip.title, start: clip.start, end: clip.end },
-        captions: {
-          lines: linesInRange(s.captionLines, clip.start, clip.end),
-          style: s.captionStyle,
-        },
-        hookBanner: s.hookBanner,
-        framing: s.framing,
-        filters: s.filters,
-        keyframes: s.keyframesByClip[clip.id] ?? [],
-        audio: {
-          volume: s.audio.volume,
-          noiseReduction: s.audio.noiseReduction,
-          volumeLeveling: s.audio.volumeLeveling,
-          musicMediaId: s.audio.musicMediaId,
-          musicVolume: s.audio.musicVolume,
-        },
-        stickers: s.stickers.map((st) => ({
-          dataUrl: st.dataUrl,
-          x: st.x,
-          y: st.y,
-          scale: st.scale,
-          opacity: st.opacity,
-        })),
-        sourceWidth: source.width,
-        sourceHeight: source.height,
-      };
-      const res = await fetch("/api/export", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body?.error ?? "Export failed to start");
-      s.upsertExportJob(body.job);
+      await submitClip(clip);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Export failed to start");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function startExportAll() {
+    const allClips = useEditorStore.getState().clips;
+    if (!source || allClips.length === 0) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      for (const c of allClips) {
+        await submitClip(c);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Batch export failed");
     } finally {
       setSubmitting(false);
     }
@@ -152,13 +181,25 @@ export default function ExportQueueModal() {
               </button>
             ))}
           </div>
-          <button
-            className="btn-primary mt-2.5 w-full"
-            onClick={startExport}
-            disabled={!clip || !source || submitting}
-          >
-            {submitting ? "Queueing…" : "Render 1080p · 60fps"}
-          </button>
+          <div className="mt-2.5 flex gap-1.5">
+            <button
+              className="btn-primary flex-1"
+              onClick={startExport}
+              disabled={!clip || !source || submitting}
+            >
+              {submitting ? "Queueing…" : "Render 1080p · 60fps"}
+            </button>
+            {clipCount > 1 && (
+              <button
+                className="btn-ghost shrink-0"
+                onClick={startExportAll}
+                disabled={!source || submitting}
+                title="Queue every detected clip with this preset"
+              >
+                All {clipCount}
+              </button>
+            )}
+          </div>
           {error && (
             <p className="mt-2 rounded-lg border border-brand-red/30 bg-brand-red/10 px-2.5 py-1.5 text-xs text-brand-red">
               {error}

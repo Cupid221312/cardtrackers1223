@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
 import type {
   AudioSettings,
   CaptionLine,
@@ -113,7 +114,9 @@ const DEFAULT_AUDIO: AudioSettings = {
   musicVolume: 0.15,
 };
 
-export const useEditorStore = create<EditorState>()((set, get) => ({
+export const useEditorStore = create<EditorState>()(
+  persist(
+    (set, get) => ({
   source: null,
   ingesting: false,
   ingestError: "",
@@ -325,7 +328,46 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
       exportJobs[idx] = job;
       return { exportJobs };
     }),
-}));
+    }),
+    {
+      // Styling and finder settings survive reloads; media, transcripts,
+      // and jobs are session state and are deliberately not persisted.
+      name: "clipforge-settings",
+      version: 1,
+      storage: createJSONStorage(() => localStorage),
+      // Rehydrated manually after mount (StudioShell) so server-rendered
+      // HTML always matches the first client render.
+      skipHydration: true,
+      partialize: (s) => ({
+        captionStyle: s.captionStyle,
+        clipFinderSettings: s.clipFinderSettings,
+        framing: s.framing,
+        filters: s.filters,
+        hookBanner: {
+          enabled: s.hookBanner.enabled,
+          bgColor: s.hookBanner.bgColor,
+          textColor: s.hookBanner.textColor,
+          verticalPosition: s.hookBanner.verticalPosition,
+        },
+        audio: {
+          volume: s.audio.volume,
+          noiseReduction: s.audio.noiseReduction,
+          volumeLeveling: s.audio.volumeLeveling,
+          musicVolume: s.audio.musicVolume,
+        },
+      }),
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<EditorState>;
+        return {
+          ...current,
+          ...p,
+          hookBanner: { ...current.hookBanner, ...p.hookBanner },
+          audio: { ...current.audio, ...p.audio },
+        };
+      },
+    },
+  ),
+);
 
 /** The currently selected clip object, or null. */
 export function useSelectedClip() {

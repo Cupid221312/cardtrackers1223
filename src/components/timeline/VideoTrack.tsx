@@ -77,25 +77,17 @@ export default function VideoTrack({
     >
       {source && (
         <div
-          className="absolute inset-y-2 rounded-md bg-gradient-to-r from-ink-700 to-ink-600 opacity-60"
-          style={{ left: 0, width: duration * pxPerSec }}
-        >
-          {/* faux frame strip */}
-          <div className="flex h-full overflow-hidden rounded-md">
-            {Array.from({ length: Math.max(1, Math.floor(duration / 4)) }).map(
-              (_, i) => (
-                <div
-                  key={i}
-                  className="h-full shrink-0 border-r border-black/30"
-                  style={{
-                    width: 4 * pxPerSec,
-                    background: `hsl(${(i * 37) % 360} 18% ${16 + ((i * 13) % 12)}%)`,
-                  }}
-                />
-              ),
-            )}
-          </div>
-        </div>
+          className="absolute inset-y-2 overflow-hidden rounded-md bg-gradient-to-r from-ink-700 to-ink-600"
+          style={{
+            left: 0,
+            width: duration * pxPerSec,
+            // Real filmstrip sprite (20 frames tiled server-side); the
+            // gradient behind it shows until the strip loads.
+            backgroundImage: `url(/api/media/${source.mediaId}/thumbs), linear-gradient(to right, #1e2330, #2a3040)`,
+            backgroundSize: "100% 100%",
+            opacity: 0.85,
+          }}
+        />
       )}
 
       {clips.map((clip) => {

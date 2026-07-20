@@ -123,9 +123,27 @@ export default function PreviewCanvas() {
       const target = e.target as HTMLElement;
       if (["INPUT", "TEXTAREA"].includes(target.tagName) || target.isContentEditable)
         return;
+      const s = useEditorStore.getState();
       if (e.code === "Space") {
         e.preventDefault();
         togglePlay();
+      } else if (e.code === "ArrowLeft" || e.code === "ArrowRight") {
+        if (!s.source) return;
+        e.preventDefault();
+        const step = (e.shiftKey ? 5 : 1) * (e.code === "ArrowLeft" ? -1 : 1);
+        s.seekTo(
+          Math.min(Math.max(0, s.currentTime + step), s.source.duration),
+        );
+      } else if (e.code === "KeyI" || e.code === "KeyO") {
+        // Trim the selected clip's in/out point to the playhead.
+        const c = s.clips.find((cl) => cl.id === s.selectedClipId);
+        if (!c) return;
+        e.preventDefault();
+        if (e.code === "KeyI" && s.currentTime < c.end - 1) {
+          s.setClipRange(c.id, s.currentTime, c.end);
+        } else if (e.code === "KeyO" && s.currentTime > c.start + 1) {
+          s.setClipRange(c.id, c.start, s.currentTime);
+        }
       }
     };
     window.addEventListener("keydown", onKey);
