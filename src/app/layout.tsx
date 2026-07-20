@@ -1,35 +1,18 @@
 import type { Metadata } from "next";
-import localFont from "next/font/local";
 import "./globals.css";
 
-const geistSans = localFont({
-  src: "./fonts/GeistVF.woff",
-  variable: "--font-geist-sans",
-  weight: "100 900",
-});
-const geistMono = localFont({
-  src: "./fonts/GeistMonoVF.woff",
-  variable: "--font-geist-mono",
-  weight: "100 900",
-});
-
 export const metadata: Metadata = {
-  title: "Card Market Intel",
-  description: "Sports & TCG card market intelligence with Deal Scores",
+  title: "ClipForge Studio — AI Video Clipping",
+  description:
+    "Turn long-form video into viral-ready vertical clips with AI transcription, hook detection, karaoke captions, and a full manual editing suite.",
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
-      </body>
+      <body className="h-screen overflow-hidden antialiased">{children}</body>
     </html>
   );
 }

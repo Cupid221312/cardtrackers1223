@@ -1,8 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Emits .next/standalone with a self-contained server.js — copied into the
-  // Docker runner stage and started with `node server.js`.
-  output: "standalone",
+  // ffmpeg-static / ffprobe-static resolve real binary paths at runtime;
+  // keep them out of the webpack bundle so those paths stay valid.
+  experimental: {
+    serverComponentsExternalPackages: [
+      "@ffmpeg-installer/ffmpeg",
+      "@ffprobe-installer/ffprobe",
+      "@distube/ytdl-core",
+    ],
+  },
 };
 
 export default nextConfig;

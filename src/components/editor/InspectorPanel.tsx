@@ -1,0 +1,573 @@
+"use client";
+
+import { useRef } from "react";
+import {
+  useEditorStore,
+  useSelectedClip,
+  useSelectedClipKeyframes,
+} from "@/lib/store/editorStore";
+import { CAPTION_TEMPLATES, TEMPLATE_LABELS } from "@/lib/captionTemplates";
+import type { CaptionTemplateId } from "@/lib/types";
+import { formatTimecode } from "@/lib/time";
+import clsx from "clsx";
+
+function Slider({
+  label,
+  value,
+  min,
+  max,
+  step,
+  onChange,
+  format = (v: number) => v.toFixed(2),
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: number) => void;
+  format?: (v: number) => string;
+}) {
+  return (
+    <label className="block">
+      <div className="mb-1 flex items-center justify-between">
+        <span className="text-[11px] font-medium text-slate-400">{label}</span>
+        <span className="text-[11px] tabular-nums text-slate-500">
+          {format(value)}
+        </span>
+      </div>
+      <input
+        type="range"
+        className="slider"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+      />
+    </label>
+  );
+}
+
+function ColorField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <label className="flex items-center justify-between gap-2">
+      <span className="text-[11px] font-medium text-slate-400">{label}</span>
+      <input
+        type="color"
+        className="h-6 w-9 cursor-pointer rounded border border-ink-600 bg-transparent"
+        value={value || "#000000"}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </label>
+  );
+}
+
+export default function InspectorPanel() {
+  const style = useEditorStore((s) => s.captionStyle);
+  const banner = useEditorStore((s) => s.hookBanner);
+  const framing = useEditorStore((s) => s.framing);
+  const filters = useEditorStore((s) => s.filters);
+  const audio = useEditorStore((s) => s.audio);
+  const stickers = useEditorStore((s) => s.stickers);
+  const clip = useSelectedClip();
+  const keyframes = useSelectedClipKeyframes();
+  const currentTime = useEditorStore((s) => s.currentTime);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const musicInputRef = useRef<HTMLInputElement>(null);
+
+  const st = () => useEditorStore.getState();
+
+  return (
+    <div className="flex flex-col gap-3">
+      {/* ---- caption style ------------------------------------------------ */}
+      <section className="panel p-3">
+        <h2 className="panel-title mb-2.5">Caption Style</h2>
+        <div className="mb-3 grid grid-cols-3 gap-1.5">
+          {(Object.keys(CAPTION_TEMPLATES) as CaptionTemplateId[]).map((id) => (
+            <button
+              key={id}
+              onClick={() => st().applyTemplate(id)}
+              className={clsx(
+                "rounded-lg border px-1 py-2 text-center transition",
+                style.template === id
+                  ? "border-accent/70 bg-accent/10"
+                  : "border-ink-700 bg-ink-900 hover:border-ink-500",
+              )}
+            >
+              <TemplateSwatch id={id} />
+              <span className="mt-1 block text-[10px] font-medium text-slate-300">
+                {TEMPLATE_LABELS[id]}
+              </span>
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-col gap-2.5">
+          <Slider
+            label="Font size"
+            value={style.fontSize}
+            min={0.02}
+            max={0.07}
+            step={0.001}
+            onChange={(v) => st().updateCaptionStyle({ fontSize: v })}
+            format={(v) => `${Math.round(v * 1920)}px`}
+          />
+          <Slider
+            label="Vertical position"
+            value={style.verticalPosition}
+            min={0.1}
+            max={0.9}
+            step={0.01}
+            onChange={(v) => st().updateCaptionStyle({ verticalPosition: v })}
+            format={(v) => `${Math.round(v * 100)}%`}
+          />
+          <Slider
+            label="Words per line"
+            value={style.maxWordsPerLine}
+            min={1}
+            max={7}
+            step={1}
+            onChange={(v) => st().updateCaptionStyle({ maxWordsPerLine: v })}
+            format={(v) => String(v)}
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <ColorField
+              label="Text"
+              value={style.textColor}
+              onChange={(v) => st().updateCaptionStyle({ textColor: v })}
+            />
+            <ColorField
+              label="Active"
+              value={style.activeColor}
+              onChange={(v) => st().updateCaptionStyle({ activeColor: v })}
+            />
+          </div>
+          <label className="flex items-center gap-2 text-[11px] font-medium text-slate-400">
+            <input
+              type="checkbox"
+              className="accent-accent"
+              checked={style.uppercase}
+              onChange={(e) =>
+                st().updateCaptionStyle({ uppercase: e.target.checked })
+              }
+            />
+            UPPERCASE
+          </label>
+        </div>
+      </section>
+
+      {/* ---- hook banner -------------------------------------------------- */}
+      <section className="panel p-3">
+        <div className="mb-2.5 flex items-center justify-between">
+          <h2 className="panel-title">Hook Banner</h2>
+          <input
+            type="checkbox"
+            className="accent-accent"
+            checked={banner.enabled}
+            onChange={(e) => st().updateHookBanner({ enabled: e.target.checked })}
+          />
+        </div>
+        <textarea
+          className="text-input resize-none"
+          rows={2}
+          value={banner.text}
+          onChange={(e) => st().updateHookBanner({ text: e.target.value })}
+          placeholder="Punchy title shown at the top of the clip"
+        />
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <ColorField
+            label="Banner"
+            value={banner.bgColor}
+            onChange={(v) => st().updateHookBanner({ bgColor: v })}
+          />
+          <ColorField
+            label="Text"
+            value={banner.textColor}
+            onChange={(v) => st().updateHookBanner({ textColor: v })}
+          />
+        </div>
+        <div className="mt-2">
+          <Slider
+            label="Position"
+            value={banner.verticalPosition}
+            min={0.02}
+            max={0.4}
+            step={0.01}
+            onChange={(v) => st().updateHookBanner({ verticalPosition: v })}
+            format={(v) => `${Math.round(v * 100)}%`}
+          />
+        </div>
+      </section>
+
+      {/* ---- layout & framing --------------------------------------------- */}
+      <section className="panel p-3">
+        <h2 className="panel-title mb-2.5">Layout & Framing</h2>
+        <div className="mb-2.5 grid grid-cols-2 gap-1.5">
+          <button
+            className={clsx(
+              "rounded-lg border px-2 py-1.5 text-xs font-medium transition",
+              framing.mode === "fit-blur"
+                ? "border-accent/70 bg-accent/10 text-white"
+                : "border-ink-700 bg-ink-900 text-slate-400 hover:border-ink-500",
+            )}
+            onClick={() => st().updateFraming({ mode: "fit-blur" })}
+          >
+            Blur Fill
+          </button>
+          <button
+            className={clsx(
+              "rounded-lg border px-2 py-1.5 text-xs font-medium transition",
+              framing.mode === "crop"
+                ? "border-accent/70 bg-accent/10 text-white"
+                : "border-ink-700 bg-ink-900 text-slate-400 hover:border-ink-500",
+            )}
+            onClick={() => st().updateFraming({ mode: "crop" })}
+          >
+            Crop 9:16
+          </button>
+        </div>
+        <div className="flex flex-col gap-2.5">
+          <Slider
+            label="Zoom"
+            value={framing.zoom}
+            min={1}
+            max={2.5}
+            step={0.01}
+            onChange={(v) => st().updateFraming({ zoom: v })}
+            format={(v) => `${v.toFixed(2)}×`}
+          />
+          <Slider
+            label="Pan X"
+            value={framing.panX}
+            min={-1}
+            max={1}
+            step={0.01}
+            onChange={(v) => st().updateFraming({ panX: v })}
+          />
+          <Slider
+            label="Pan Y"
+            value={framing.panY}
+            min={-1}
+            max={1}
+            step={0.01}
+            onChange={(v) => st().updateFraming({ panY: v })}
+          />
+          {framing.mode === "fit-blur" && (
+            <Slider
+              label="Background blur"
+              value={filters.backgroundBlur}
+              min={0}
+              max={60}
+              step={1}
+              onChange={(v) => st().updateFilters({ backgroundBlur: v })}
+              format={(v) => `${v}px`}
+            />
+          )}
+        </div>
+
+        {/* keyframes */}
+        <div className="mt-3 border-t border-ink-700 pt-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-medium text-slate-400">
+              Zoom/Pan keyframes
+            </span>
+            <button
+              className="btn-ghost !px-2 !py-1 text-[11px]"
+              disabled={!clip}
+              onClick={() => {
+                if (!clip) return;
+                st().addKeyframe(clip.id, {
+                  id: `kf-${Date.now()}`,
+                  time: Math.max(0, currentTime - clip.start),
+                  zoom: framing.zoom,
+                  panX: framing.panX,
+                  panY: framing.panY,
+                });
+              }}
+            >
+              + Add at playhead
+            </button>
+          </div>
+          <div className="mt-1.5 flex flex-col gap-1">
+            {keyframes.map((kf) => (
+              <div
+                key={kf.id}
+                className="flex items-center justify-between rounded-md bg-ink-900 px-2 py-1 text-[11px] text-slate-400"
+              >
+                <span className="tabular-nums">
+                  {formatTimecode(kf.time)} · {kf.zoom.toFixed(2)}×
+                </span>
+                <button
+                  className="text-slate-600 hover:text-brand-red"
+                  onClick={() => clip && st().removeKeyframe(clip.id, kf.id)}
+                  aria-label="Delete keyframe"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+            {keyframes.length === 0 && (
+              <p className="text-[11px] text-slate-600">
+                Scrub to a moment, set zoom/pan, then add a keyframe.
+              </p>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* ---- visual filters ----------------------------------------------- */}
+      <section className="panel p-3">
+        <h2 className="panel-title mb-2.5">Visual Filters</h2>
+        <div className="flex flex-col gap-2.5">
+          <Slider
+            label="Brightness"
+            value={filters.brightness}
+            min={-0.5}
+            max={0.5}
+            step={0.01}
+            onChange={(v) => st().updateFilters({ brightness: v })}
+          />
+          <Slider
+            label="Contrast"
+            value={filters.contrast}
+            min={0.5}
+            max={1.8}
+            step={0.01}
+            onChange={(v) => st().updateFilters({ contrast: v })}
+          />
+          <Slider
+            label="Saturation"
+            value={filters.saturation}
+            min={0}
+            max={2}
+            step={0.01}
+            onChange={(v) => st().updateFilters({ saturation: v })}
+          />
+        </div>
+      </section>
+
+      {/* ---- audio -------------------------------------------------------- */}
+      <section className="panel p-3">
+        <h2 className="panel-title mb-2.5">Audio</h2>
+        <div className="flex flex-col gap-2.5">
+          <Slider
+            label="Clip volume"
+            value={audio.volume}
+            min={0}
+            max={2}
+            step={0.01}
+            onChange={(v) => st().updateAudio({ volume: v })}
+            format={(v) => `${Math.round(v * 100)}%`}
+          />
+          <label className="flex items-center gap-2 text-[11px] font-medium text-slate-400">
+            <input
+              type="checkbox"
+              className="accent-accent"
+              checked={audio.noiseReduction}
+              onChange={(e) =>
+                st().updateAudio({ noiseReduction: e.target.checked })
+              }
+            />
+            Noise reduction (applied on export)
+          </label>
+          <label className="flex items-center gap-2 text-[11px] font-medium text-slate-400">
+            <input
+              type="checkbox"
+              className="accent-accent"
+              checked={audio.volumeLeveling}
+              onChange={(e) =>
+                st().updateAudio({ volumeLeveling: e.target.checked })
+              }
+            />
+            Loudness leveling (broadcast -14 LUFS)
+          </label>
+          <div className="border-t border-ink-700 pt-2.5">
+            {audio.musicUrl ? (
+              <div className="flex items-center justify-between rounded-md bg-ink-900 px-2 py-1.5 text-[11px]">
+                <span className="truncate text-slate-300">🎵 {audio.musicName}</span>
+                <button
+                  className="ml-2 text-slate-600 hover:text-brand-red"
+                  onClick={() =>
+                    st().updateAudio({
+                      musicUrl: "",
+                      musicMediaId: "",
+                      musicName: "",
+                    })
+                  }
+                >
+                  ✕
+                </button>
+              </div>
+            ) : (
+              <button
+                className="btn-ghost w-full !py-1.5 text-xs"
+                onClick={() => musicInputRef.current?.click()}
+              >
+                + Background music track
+              </button>
+            )}
+            <input
+              ref={musicInputRef}
+              type="file"
+              accept="audio/*"
+              className="hidden"
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (!f) return;
+                const form = new FormData();
+                form.append("file", f);
+                try {
+                  const res = await fetch("/api/upload", {
+                    method: "POST",
+                    body: form,
+                  });
+                  const body = await res.json();
+                  st().updateAudio({
+                    musicUrl: URL.createObjectURL(f),
+                    musicMediaId: res.ok ? body.mediaId : "",
+                    musicName: f.name,
+                  });
+                } catch {
+                  st().updateAudio({
+                    musicUrl: URL.createObjectURL(f),
+                    musicMediaId: "",
+                    musicName: `${f.name} (preview only)`,
+                  });
+                }
+              }}
+            />
+            {audio.musicUrl && (
+              <div className="mt-2">
+                <Slider
+                  label="Music volume"
+                  value={audio.musicVolume}
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  onChange={(v) => st().updateAudio({ musicVolume: v })}
+                  format={(v) => `${Math.round(v * 100)}%`}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* ---- stickers & branding ------------------------------------------ */}
+      <section className="panel p-3">
+        <h2 className="panel-title mb-2.5">Stickers & Branding</h2>
+        <button
+          className="btn-ghost w-full !py-1.5 text-xs"
+          onClick={() => logoInputRef.current?.click()}
+        >
+          + Upload logo / watermark
+        </button>
+        <input
+          ref={logoInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/svg+xml"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = "";
+            if (!f) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+              st().addSticker({
+                id: `sticker-${Date.now()}`,
+                name: f.name,
+                url: URL.createObjectURL(f),
+                dataUrl: String(reader.result),
+                x: 0.85,
+                y: 0.06,
+                scale: 0.18,
+                opacity: 0.95,
+              });
+            };
+            reader.readAsDataURL(f);
+          }}
+        />
+        <div className="mt-2 flex flex-col gap-2">
+          {stickers.map((sticker) => (
+            <div
+              key={sticker.id}
+              className="rounded-lg border border-ink-700 bg-ink-900 p-2"
+            >
+              <div className="flex items-center justify-between">
+                <span className="truncate text-[11px] font-medium text-slate-300">
+                  {sticker.name}
+                </span>
+                <button
+                  className="text-slate-600 hover:text-brand-red"
+                  onClick={() => st().removeSticker(sticker.id)}
+                  aria-label="Remove sticker"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="mt-1.5 flex flex-col gap-1.5">
+                <Slider
+                  label="Size"
+                  value={sticker.scale}
+                  min={0.05}
+                  max={0.6}
+                  step={0.01}
+                  onChange={(v) => st().updateSticker(sticker.id, { scale: v })}
+                  format={(v) => `${Math.round(v * 100)}%`}
+                />
+                <Slider
+                  label="Opacity"
+                  value={sticker.opacity}
+                  min={0.1}
+                  max={1}
+                  step={0.01}
+                  onChange={(v) => st().updateSticker(sticker.id, { opacity: v })}
+                  format={(v) => `${Math.round(v * 100)}%`}
+                />
+              </div>
+              <p className="mt-1 text-[10px] text-slate-600">
+                Drag it on the canvas to reposition.
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function TemplateSwatch({ id }: { id: CaptionTemplateId }) {
+  const t = CAPTION_TEMPLATES[id];
+  return (
+    <div className="flex h-8 items-center justify-center rounded bg-black/60">
+      <span
+        className="font-caption text-[9px] leading-none"
+        style={{
+          color: t.textColor,
+          textShadow: t.strokeColor ? `1px 1px 0 ${t.strokeColor}` : undefined,
+        }}
+      >
+        MAKE{" "}
+        <span
+          style={{
+            color: t.activeColor,
+            backgroundColor: t.activeBgColor || undefined,
+            padding: t.activeBgColor ? "0 2px" : undefined,
+            borderRadius: 2,
+          }}
+        >
+          MONEY
+        </span>
+      </span>
+    </div>
+  );
+}

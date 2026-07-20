@@ -1,0 +1,321 @@
+"use client";
+
+import { useRef, useState } from "react";
+import { useEditorStore } from "@/lib/store/editorStore";
+import TranscriptPanel from "@/components/editor/TranscriptPanel";
+import { findClips } from "@/services/ai/clipFinder";
+import { formatTime } from "@/lib/time";
+import type { ClipCandidate, SourceMedia, Transcript } from "@/lib/types";
+import clsx from "clsx";
+
+async function readJsonOrThrow(res: Response) {
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(body?.error ?? `Request failed (${res.status})`);
+  }
+  return body;
+}
+
+export default function SourcePanel() {
+  const store = useEditorStore;
+  const source = useEditorStore((s) => s.source);
+  const ingesting = useEditorStore((s) => s.ingesting);
+  const ingestError = useEditorStore((s) => s.ingestError);
+  const transcribing = useEditorStore((s) => s.transcribing);
+  const transcript = useEditorStore((s) => s.transcript);
+  const clips = useEditorStore((s) => s.clips);
+  const detecting = useEditorStore((s) => s.detectingClips);
+  const settings = useEditorStore((s) => s.clipFinderSettings);
+  const selectedClipId = useEditorStore((s) => s.selectedClipId);
+
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ---- ingestion ----------------------------------------------------------
+
+  async function handleUpload(file: File) {
+    const s = store.getState();
+    s.setIngesting(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const body = await readJsonOrThrow(
+        await fetch("/api/upload", { method: "POST", body: form }),
+      );
+      const media: SourceMedia = {
+        mediaId: body.mediaId,
+        previewUrl: URL.createObjectURL(file),
+        name: file.name,
+        duration: body.duration,
+        width: body.width,
+        height: body.height,
+        origin: "upload",
+      };
+      s.setSource(media);
+      s.setIngesting(false);
+      void transcribe(media);
+    } catch (err) {
+      s.setIngesting(false, err instanceof Error ? err.message : "Upload failed");
+    }
+  }
+
+  async function handleYoutube() {
+    const s = store.getState();
+    if (!youtubeUrl.trim()) return;
+    s.setIngesting(true);
+    try {
+      const body = await readJsonOrThrow(
+        await fetch("/api/ingest/youtube", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: youtubeUrl.trim() }),
+        }),
+      );
+      const media: SourceMedia = {
+        mediaId: body.mediaId,
+        previewUrl: `/api/media/${body.mediaId}`,
+        name: body.title,
+        duration: body.duration,
+        width: body.width,
+        height: body.height,
+        origin: "youtube",
+      };
+      s.setSource(media);
+      s.setIngesting(false);
+      void transcribe(media);
+    } catch (err) {
+      s.setIngesting(
+        false,
+        err instanceof Error ? err.message : "YouTube import failed",
+      );
+    }
+  }
+
+  // ---- transcription + clip detection -------------------------------------
+
+  async function transcribe(media: SourceMedia) {
+    const s = store.getState();
+    s.setTranscribing(true);
+    try {
+      const body = await readJsonOrThrow(
+        await fetch("/api/transcribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mediaId: media.mediaId }),
+        }),
+      );
+      s.setTranscript(body.transcript as Transcript);
+      s.setTranscribing(false);
+      void detectClips(body.transcript as Transcript);
+    } catch (err) {
+      s.setTranscribing(false);
+      s.setIngesting(
+        false,
+        err instanceof Error ? err.message : "Transcription failed",
+      );
+    }
+  }
+
+  async function detectClips(t?: Transcript) {
+    const s = store.getState();
+    const tr = t ?? s.transcript;
+    if (!tr) return;
+    s.setDetectingClips(true);
+    try {
+      const body = await readJsonOrThrow(
+        await fetch("/api/clips/detect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ transcript: tr, settings: s.clipFinderSettings }),
+        }),
+      );
+      s.setClips(body.clips as ClipCandidate[]);
+      if (body.clips.length > 0) s.selectClip(body.clips[0].id);
+    } catch {
+      // Server route unavailable — heuristics run identically client-side.
+      const clips = findClips(tr, s.clipFinderSettings);
+      s.setClips(clips);
+      if (clips.length > 0) s.selectClip(clips[0].id);
+    } finally {
+      s.setDetectingClips(false);
+    }
+  }
+
+  const busy = ingesting || transcribing;
+
+  return (
+    <div className="flex flex-col gap-3">
+      {/* ---- importer ---------------------------------------------------- */}
+      <section className="panel p-3">
+        <h2 className="panel-title mb-2.5">Source Media</h2>
+        <div className="flex gap-1.5">
+          <input
+            className="text-input"
+            placeholder="Paste a YouTube URL…"
+            value={youtubeUrl}
+            onChange={(e) => setYoutubeUrl(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleYoutube()}
+            disabled={busy}
+          />
+          <button
+            className="btn-ghost shrink-0 !px-2.5"
+            onClick={handleYoutube}
+            disabled={busy || !youtubeUrl.trim()}
+            aria-label="Import from YouTube"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current">
+              <path d="M12 4a1 1 0 0 1 1 1v9.6l3.3-3.3a1 1 0 0 1 1.4 1.4l-5 5a1 1 0 0 1-1.4 0l-5-5a1 1 0 0 1 1.4-1.4L11 14.6V5a1 1 0 0 1 1-1Z" />
+            </svg>
+          </button>
+        </div>
+        <div className="my-2 flex items-center gap-2 text-[10px] uppercase tracking-widest text-slate-600">
+          <div className="h-px flex-1 bg-ink-700" /> or <div className="h-px flex-1 bg-ink-700" />
+        </div>
+        <button
+          className="btn-ghost w-full border-dashed"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={busy}
+        >
+          {ingesting ? "Importing…" : "Upload MP4 / MOV"}
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="video/mp4,video/quicktime,video/webm"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void handleUpload(f);
+            e.target.value = "";
+          }}
+        />
+        {ingestError && (
+          <p className="mt-2 rounded-lg border border-brand-red/30 bg-brand-red/10 px-2.5 py-1.5 text-xs text-brand-red">
+            {ingestError}
+          </p>
+        )}
+        {source && (
+          <div className="mt-2.5 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-2 text-xs">
+            <p className="truncate font-medium text-slate-200">{source.name}</p>
+            <p className="mt-0.5 text-slate-500">
+              {formatTime(source.duration)} · {source.width}×{source.height} ·{" "}
+              {source.origin === "youtube" ? "YouTube" : "Upload"}
+            </p>
+          </div>
+        )}
+      </section>
+
+      {/* ---- AI clip finder ---------------------------------------------- */}
+      <section className="panel p-3">
+        <div className="mb-2.5 flex items-center justify-between">
+          <h2 className="panel-title">AI Clip Finder</h2>
+          {transcribing && (
+            <span className="animate-pulse text-[11px] text-accent-glow">
+              Transcribing…
+            </span>
+          )}
+        </div>
+
+        <div className="mb-2.5 grid grid-cols-3 gap-1.5">
+          <label className="text-[11px] text-slate-400">
+            Min s
+            <input
+              type="number"
+              className="text-input mt-1 !px-2 !py-1"
+              value={settings.minDuration}
+              min={10}
+              max={settings.maxDuration}
+              onChange={(e) =>
+                store.getState().setClipFinderSettings({
+                  minDuration: Number(e.target.value) || 30,
+                })
+              }
+            />
+          </label>
+          <label className="text-[11px] text-slate-400">
+            Max s
+            <input
+              type="number"
+              className="text-input mt-1 !px-2 !py-1"
+              value={settings.maxDuration}
+              min={settings.minDuration}
+              max={180}
+              onChange={(e) =>
+                store.getState().setClipFinderSettings({
+                  maxDuration: Number(e.target.value) || 60,
+                })
+              }
+            />
+          </label>
+          <label className="text-[11px] text-slate-400">
+            Clips
+            <input
+              type="number"
+              className="text-input mt-1 !px-2 !py-1"
+              value={settings.maxClips}
+              min={1}
+              max={12}
+              onChange={(e) =>
+                store.getState().setClipFinderSettings({
+                  maxClips: Number(e.target.value) || 6,
+                })
+              }
+            />
+          </label>
+        </div>
+
+        <button
+          className="btn-primary w-full"
+          onClick={() => void detectClips()}
+          disabled={!transcript || detecting}
+        >
+          {detecting ? "Analyzing…" : "✦ Find Viral Clips"}
+        </button>
+
+        <div className="mt-2.5 flex flex-col gap-1.5">
+          {clips.map((clip) => (
+            <button
+              key={clip.id}
+              onClick={() => store.getState().selectClip(clip.id)}
+              className={clsx(
+                "rounded-lg border px-2.5 py-2 text-left transition",
+                selectedClipId === clip.id
+                  ? "border-accent/70 bg-accent/10 shadow-glow"
+                  : "border-ink-700 bg-ink-900 hover:border-ink-500",
+              )}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="truncate text-xs font-semibold text-slate-100">
+                  {clip.title}
+                </span>
+                <span
+                  className={clsx(
+                    "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold",
+                    clip.score >= 75
+                      ? "bg-brand-green/15 text-brand-green"
+                      : clip.score >= 55
+                        ? "bg-brand-yellow/15 text-brand-yellow"
+                        : "bg-ink-700 text-slate-400",
+                  )}
+                >
+                  {clip.score}
+                </span>
+              </div>
+              <p className="mt-0.5 text-[11px] text-slate-500">
+                {formatTime(clip.start)}–{formatTime(clip.end)} · {clip.reason}
+              </p>
+            </button>
+          ))}
+          {clips.length === 0 && transcript && !detecting && (
+            <p className="text-center text-xs text-slate-500">
+              No clips yet — run the finder.
+            </p>
+          )}
+        </div>
+      </section>
+
+      {/* ---- transcript --------------------------------------------------- */}
+      <TranscriptPanel />
+    </div>
+  );
+}

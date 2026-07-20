@@ -1,176 +1,113 @@
-# Card Market Intel
+# ClipForge Studio
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Cupid221312/cardtrackers1223/tree/claude/card-market-intel-setup-cds2yl)
+An AI-powered video clipping and editing studio for turning long-form video
+into viral-ready vertical clips — in the spirit of Opus Clip and Descript.
+Built with Next.js (App Router), TypeScript, Tailwind CSS, Zustand, FFmpeg,
+and OpenAI Whisper.
 
-**One-click deploy:** the button above reads `render.yaml` and provisions
-Postgres + web + scheduler with env vars pre-wired. You need a free Render
-account and to authorize GitHub access, nothing else.
+## What it does
 
----
+**AI pipeline**
 
+- **Ingest** a YouTube URL or upload an MP4/MOV/WebM.
+- **Transcribe** with OpenAI Whisper (word-level timestamps). Without an
+  `OPENAI_API_KEY` the app stays fully usable offline with a clearly-labeled
+  demo transcript.
+- **Find viral clips**: deterministic hook/sentiment/topic-change heuristics
+  slice the source into 30–60 s candidates with scores and explanations;
+  with an API key the winners are re-titled and re-scored by an LLM.
 
-Sports & TCG card market intelligence: track cards, ingest sales comps, and rank
-active listings with a 0–100 **Deal Score**. Runs fully offline in **mock mode**
-(seeded, deterministic data) — no API keys, no Docker, no scrapers needed.
+**Editor**
 
-## Quick start
+- Central **9:16 canvas** with live hook banner, karaoke captions (active
+  word highlighting), draggable stickers/watermarks, and blur-fill or
+  crop framing — preview matches the export pixel-for-pixel.
+- **Caption engine** with style templates (Hormozi Bold, Minimalist Clean,
+  Chip Pop) plus per-field overrides (font size, colors, stroke, position,
+  words per line). Double-click any transcript word to correct it — captions
+  update instantly because they derive from the same word objects.
+- **Multi-track timeline** (video / audio / text) with click-and-drag
+  scrubbing, trim handles on the selected clip, drag-to-slide clip windows,
+  and drag-to-retime caption lines. Zoomable px-per-second scale.
+- **Inspector**: brightness/contrast/saturation, background blur, zoom/pan
+  with smoothstep-eased keyframes (preview), volume, FFmpeg noise reduction
+  (`afftdn`), loudness leveling (`loudnorm` to −14 LUFS), and background
+  music with independent gain.
+
+**Export**
+
+- **Export Queue** modal renders clips server-side with FFmpeg at
+  1080×1920 · 60 fps (H.264 + AAC, `+faststart`) with presets for TikTok,
+  YouTube Shorts, and Instagram Reels. Captions and the hook banner are
+  burned in via a generated ASS subtitle track (one dialogue event per word
+  for exact karaoke highlighting); stickers, filters, framing, and the full
+  audio chain are composed in a single filter graph. Jobs report live
+  progress parsed from FFmpeg output.
+
+## Getting started
 
 ```bash
 npm install
-cp .env.example .env
-npm run db:push    # create the SQLite database (prisma/dev.db)
-npm run db:seed    # seed 12 cards, ~2,700 sales comps, ~40 active listings
-npm run dev:all    # app + 10-minute market updates · open http://localhost:3000
+cp .env.example .env   # optional: add OPENAI_API_KEY for real Whisper + LLM titles
+npm run dev            # http://localhost:3000
 ```
 
-## Live updates (every 10 minutes)
-
-`npm run dev:all` runs the web app and the market scheduler together. The
-scheduler (`scripts/scheduler.ts`) runs a refresh cycle immediately and then
-every 10 minutes; the dashboard re-fetches itself every 60 seconds, so new
-data appears without reloading. In mock mode each cycle simulates the market
-moving — new sales at each card's own liquidity, bargain listings getting
-bought, fresh listings appearing. Prices, trends, and Deal Scores are always
-recomputed from the latest data on every page load.
-
-- `npm run refresh` — run a single update cycle by hand
-- `npm run scheduler` — just the 10-minute updater (if you run `npm run dev` separately)
-## Data sources
-
-Each marketplace is a **Connector** (`src/lib/connectors/types.ts`) — every
-source runs through the same hardened HTTP layer (timeout + response size
-cap) and gets the same per-cycle error isolation, so a slow or blocked
-source can't take down the worker.
-
-| Source | Sold comps | Active listings | Env flag |
-|---|---|---|---|
-| eBay (public search) | ✅ | ✅ | on by default |
-| MySlabs | — | ✅ | `MYSLABS_ENABLED=false` to disable |
-
-Adding another source is a single module implementing the `Connector`
-interface plus one line in `src/lib/connectors/index.ts`.
-
-## Real eBay data (no API key needed)
-
-Set `MOCK_MODE=false` in `.env` and restart `npm run dev:all`. Each 10-minute
-cycle then pulls **real sold comps and active Buy-It-Now listings** from
-eBay's public search for a rotating batch of 4 cards (every card refreshes
-roughly hourly), writing into the same tables — scores, trends, and the
-dashboard update automatically. Details:
-
-- Comps are filtered so the title must contain the player's last name and the
-  exact grade (PSA 10 won't match PSA 9), and duplicate sales are skipped via
-  the eBay item id.
-- Requests are throttled (`EBAY_REQUEST_DELAY_MS`, default 2000ms) to stay
-  polite. Don't lower it aggressively or eBay may rate-limit you.
-- Note: this must run on a normal network (your PC). Cloud sandboxes often
-  block eBay.
-- If eBay redesigns its markup and a fetch parses zero items, the raw HTML is
-  saved to `.debug/` — run `npm run check:parser` and update the selectors in
-  `src/lib/connectors/ebay.ts`.
-- Mock and live data coexist fine: live rows are tagged `source: "ebay"`.
-  For a clean slate before going live, delete `prisma/dev.db`, then
-  `npm run db:push` (skip the seed) — the dashboard fills up as real data
-  arrives.
-
-## Deal Score engine (`src/lib/dealScore.ts`)
-
-For each active listing, the engine looks at sales comps for the same card +
-grade over the last 120 days and computes:
-
-- **Market value** — recency-weighted median (30-day half-life), robust to outliers
-- **Trend** — %/30d from a log-price regression
-- **Volatility** — MAD/median of comp prices
-- **Confidence** — grows with sample size and recent liquidity, shrinks with noise
-
-The score starts at 50 (priced at market), rises with the discount to market
-value (+20% discount ≈ +50 points), gets a small trend nudge, and is shrunk
-toward 50 when confidence is low — so thin, noisy comps can't produce a
-runaway score. Labels: 80+ strong buy · 65+ good deal · 40+ fair · else overpriced.
-
-### Backtesting
+FFmpeg/ffprobe binaries ship via `@ffmpeg-installer/ffmpeg` /
+`@ffprobe-installer/ffprobe` (npm-hosted, no postinstall downloads), so no
+system FFmpeg is required.
 
 ```bash
-npm run backtest
+npm run test        # vitest unit tests (caption grouping, clip finder, ASS builder)
+npm run typecheck   # strict TS
+npm run build       # production build
 ```
 
-Replays history with no lookahead: each past sale is scored as if it were a
-listing (using only earlier sales), and the outcome is the median comp price
-over the following 30 days. Current seed results:
-
-| Score bucket | Avg 30d return | Hit rate |
-|---|---|---|
-| 0–39 (overpriced) | −6.5% | 15% |
-| 40–64 (fair) | +3.2% | 66% |
-| 65–79 (good deal) | +12.2% | 96% |
-| 80–100 (strong buy) | +19.6% | 100% |
-
-Spearman rank correlation (score vs realized return): **0.82**.
-
-## Resilience (Step 2)
-
-- **Retry with exponential backoff** (`src/lib/retry.ts`): transient failures
-  (network errors, 5xx, 408, 429) get up to 3 attempts with jittered backoff
-  starting at 800ms. Permanent 4xx failures (403, 404, 401) fail immediately —
-  retrying them is how you get IP-banned.
-- **Per-source circuit breaker** (`src/lib/worker/circuit-breaker.ts`):
-  after 4 consecutive failures a source's circuit opens for 5 minutes;
-  further calls short-circuit without hitting the upstream. After the
-  cooldown the breaker goes half-open and lets one probe through — success
-  closes it, failure re-opens with a fresh cooldown. Breaker state is
-  visible in every refresh log (`ebay[open] myslabs[closed]`).
-- **DB connection pool** (production): the SQLite default is single-writer.
-  For Postgres in production (Step 3), set
-  `DATABASE_URL="postgres://…/db?connection_limit=20&pool_timeout=20"` so
-  Prisma opens a bounded pool. One Prisma client is shared via the
-  `src/lib/db.ts` singleton so serverless invocations reuse connections.
-
-## Tests
-
-```bash
-npm test            # 41 unit tests: engine + parsers + http + retry + breaker
-npm run check:parser  # standalone parser fixture check
-```
-
-The engine tests cover market-value estimation, trend detection, confidence,
-label thresholds, score clamping, and the low-confidence shrink. The parser
-tests cover both eBay layouts, price/date parsing, and card/grade matching.
-
-## Dashboard
-
-- **Deal feed** — filter by score (All / Fair+ / Good 65+ / Strong 80+) and by
-  sport; narrowed views fetch `/api/deals` live. Click any row for a plain-
-  language breakdown of *why* it got that score (discount, trend, confidence)
-  and a link to the listing.
-- **Auto-refresh** every 60s; **empty state** with seed instructions when the
-  database has no cards yet.
-
-## API (typed with zod — schemas in `src/lib/schemas.ts`)
-
-| Route | Description |
-|---|---|
-| `GET /api/stats` | Dashboard overview (counts, best deal, mock-mode flag) |
-| `GET /api/deals?minScore=&sport=&limit=` | Scored active listings, best first (query validated) |
-| `GET /api/cards` | Tracked cards with per-grade market stats + sparkline data |
-
-## Stack & layout
-
-Next.js 14 (App Router, TypeScript, Tailwind) · Prisma 6 + SQLite · zod.
+## Architecture
 
 ```
-prisma/schema.prisma    Card / Sale / Listing models
-prisma/seed.ts          deterministic mock-market generator
-src/lib/dealScore.ts    scoring engine
-src/lib/queries.ts      shared data layer (API routes + server components)
-src/app/page.tsx        dashboard (stat tiles, deal feed, tracked cards)
-scripts/backtest.ts     no-lookahead backtest harness
+src/
+├─ app/
+│  ├─ page.tsx                  # studio entry
+│  └─ api/
+│     ├─ upload/                # multipart ingest → .data/uploads
+│     ├─ ingest/youtube/        # ytdl download + probe
+│     ├─ media/[id]/            # Range-aware streaming for <video>
+│     ├─ transcribe/            # Whisper (word timestamps) or demo fallback
+│     ├─ clips/detect/          # heuristics + optional LLM refinement
+│     └─ export/                # job queue: POST create, GET status/download
+├─ components/
+│  ├─ editor/                   # StudioShell, PreviewCanvas, CaptionOverlay,
+│  │                            # HookBannerOverlay, StickerLayer, SourcePanel,
+│  │                            # TranscriptPanel, InspectorPanel, ExportQueueModal
+│  └─ timeline/                 # Timeline, TimeRuler, Video/Audio/Caption tracks
+├─ lib/
+│  ├─ store/editorStore.ts      # Zustand: playback, styling, clips, jobs
+│  ├─ ffmpeg/                   # ASS subtitle builder + export filter graphs
+│  ├─ server/media.ts           # media store, ffprobe, ffmpeg runner
+│  └─ types.ts                  # shared domain types
+└─ services/ai/                 # transcription, caption grouping, clip finder
 ```
 
-## Going live later
+Design notes:
 
-- `MOCK_MODE` in `.env` is surfaced in the UI; live scrapers (Playwright MCP,
-  PriceCharting, Apify) would write into the same `Sale`/`Listing` tables and
-  everything downstream — engine, API, dashboard — works unchanged.
-- To move to Postgres: change the datasource provider in `prisma/schema.prisma`
-  to `postgresql`, point `DATABASE_URL` at your instance, re-run
-  `npm run db:push && npm run db:seed`.
+- **The `<video>` element is the playback clock**; a rAF loop mirrors its
+  time into the store, and UI-driven seeks bump a `seekVersion` the player
+  responds to. The blur-fill background is a per-frame canvas paint of the
+  same element, so it can never drift.
+- **Captions are derived state** (`words → lines`) recomputed on transcript
+  edits and words-per-line changes, and the same line objects feed both the
+  DOM preview and the exported ASS file.
+- The **export queue** lives on `globalThis` (survives dev hot reload) and
+  runs jobs sequentially; each job gets a temp workdir (ASS file, sticker
+  PNGs) that is always cleaned up.
+
+## Current limitations
+
+- Zoom/pan **keyframes animate in the preview**; exports currently bake the
+  base framing (static zoom/pan). Keyframed `zoompan` in the FFmpeg graph is
+  the next milestone.
+- The timeline waveform is a deterministic placeholder, not decoded audio.
+- YouTube ingest depends on `@distube/ytdl-core`, which can lag YouTube
+  player changes; failures degrade to a clear "upload the file instead"
+  error.
+- Face-tracking auto-reframe is not implemented; manual pan/zoom framing is.
