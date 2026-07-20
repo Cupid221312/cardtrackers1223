@@ -158,9 +158,10 @@ export const useEditorStore = create<EditorState>()(
   seekVersion: 0,
   seekTime: 0,
 
-  captionStyle: CAPTION_TEMPLATES.hormozi,
+  captionStyle: CAPTION_TEMPLATES.reels,
   hookBanner: {
-    enabled: true,
+    // Off by default to match the Reels Clean look; one click re-enables.
+    enabled: false,
     text: "YOUR HOOK GOES HERE",
     bgColor: "#ffd400",
     textColor: "#000000",
@@ -487,6 +488,9 @@ export const useEditorStore = create<EditorState>()(
         return {
           ...current,
           ...p,
+          // Deep-merge so snapshots from older versions that lack newer
+          // fields (e.g. karaoke/fontWeight) fall back to defaults.
+          captionStyle: { ...current.captionStyle, ...p.captionStyle },
           hookBanner: { ...current.hookBanner, ...p.hookBanner },
           audio: { ...current.audio, ...p.audio },
         };

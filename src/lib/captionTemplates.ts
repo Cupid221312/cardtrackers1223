@@ -5,10 +5,31 @@ import type { CaptionStyle, CaptionTemplateId } from "@/lib/types";
  * field in the inspector; the template id keeps the picker highlighted.
  */
 export const CAPTION_TEMPLATES: Record<CaptionTemplateId, CaptionStyle> = {
+  // Instagram Reels "clean phrase" style: white medium-weight sentence-case
+  // phrases in the upper-middle of the frame, thin outline + soft shadow,
+  // no per-word highlighting.
+  reels: {
+    template: "reels",
+    fontFamily: "Inter",
+    fontSize: 0.028,
+    fontWeight: 500,
+    karaoke: false,
+    uppercase: false,
+    textColor: "#ffffff",
+    activeColor: "#ffffff",
+    activeBgColor: "",
+    strokeColor: "#000000",
+    strokeWidth: 0.06,
+    shadow: true,
+    verticalPosition: 0.28,
+    maxWordsPerLine: 9,
+  },
   hormozi: {
     template: "hormozi",
     fontFamily: "Archivo Black",
     fontSize: 0.042,
+    fontWeight: 800,
+    karaoke: true,
     uppercase: true,
     textColor: "#ffffff",
     activeColor: "#ffd400",
@@ -23,6 +44,8 @@ export const CAPTION_TEMPLATES: Record<CaptionTemplateId, CaptionStyle> = {
     template: "clean",
     fontFamily: "Inter",
     fontSize: 0.034,
+    fontWeight: 600,
+    karaoke: true,
     uppercase: false,
     textColor: "#ffffff",
     activeColor: "#ffffff",
@@ -37,6 +60,8 @@ export const CAPTION_TEMPLATES: Record<CaptionTemplateId, CaptionStyle> = {
     template: "pop",
     fontFamily: "Archivo Black",
     fontSize: 0.038,
+    fontWeight: 800,
+    karaoke: true,
     uppercase: true,
     textColor: "#ffffff",
     activeColor: "#0c0e13",
@@ -50,7 +75,8 @@ export const CAPTION_TEMPLATES: Record<CaptionTemplateId, CaptionStyle> = {
 };
 
 export const TEMPLATE_LABELS: Record<CaptionTemplateId, string> = {
+  reels: "Reels Clean",
   hormozi: "Hormozi Bold",
-  clean: "Minimalist Clean",
+  clean: "Minimal Karaoke",
   pop: "Chip Pop",
 };

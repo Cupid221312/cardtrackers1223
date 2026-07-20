@@ -49,6 +49,7 @@ export function buildAssDocument(opts: {
   const fontSize = Math.round(style.fontSize * PLAY_H);
   const outline = Math.max(0, Math.round(style.strokeWidth * fontSize * 0.45));
   const shadow = style.shadow ? Math.max(1, Math.round(fontSize * 0.07)) : 0;
+  const bold = style.fontWeight >= 600 ? -1 : 0;
   // ASS MarginV is measured from the bottom edge for alignment 2.
   const captionMarginV = Math.round(
     PLAY_H - style.verticalPosition * PLAY_H - fontSize * 1.4,
@@ -68,7 +69,7 @@ export function buildAssDocument(opts: {
     "[V4+ Styles]",
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
     // Caption style: alignment 2 = bottom-center.
-    `Style: Caption,${style.fontFamily},${fontSize},${assColor(style.textColor)},${assColor(style.textColor)},${assColor(style.strokeColor || "#000000")},${assColor("#000000", 0.4)},-1,0,0,0,100,100,1,0,1,${outline},${shadow},2,60,60,${Math.max(0, captionMarginV)},1`,
+    `Style: Caption,${style.fontFamily},${fontSize},${assColor(style.textColor)},${assColor(style.textColor)},${assColor(style.strokeColor || "#000000")},${assColor("#000000", 0.4)},${bold},0,0,0,100,100,1,0,1,${outline},${shadow},2,120,120,${Math.max(0, captionMarginV)},1`,
     // Banner style: alignment 8 = top-center, BorderStyle 4 = background box.
     `Style: Banner,${style.fontFamily},${bannerFontSize},${assColor(banner.textColor)},${assColor(banner.textColor)},${assColor(banner.bgColor)},${assColor(banner.bgColor)},-1,0,0,0,100,100,1,0,4,${Math.round(bannerFontSize * 0.3)},0,8,70,70,${bannerMarginV},1`,
     "",
@@ -87,10 +88,29 @@ export function buildAssDocument(opts: {
   const activeColor = assColor(style.activeColor);
   const activeBg = style.activeBgColor ? assColor(style.activeBgColor) : "";
 
-  for (const line of lines) {
+  for (let li = 0; li < lines.length; li++) {
+    const line = lines[li];
     if (line.end <= clipStart || line.start >= clipEnd) continue;
     const wordsText = (w: string) =>
       escapeAss(style.uppercase ? w.toUpperCase() : w);
+
+    if (!style.karaoke) {
+      // Phrase mode: the whole line as one event, held on screen until
+      // the next line starts (capped) — mirrors the preview's hold.
+      const next = lines[li + 1];
+      const holdUntil = Math.min(
+        line.end + 1.5,
+        next ? next.start : Infinity,
+      );
+      const evStart = Math.max(line.start, clipStart) - clipStart;
+      const evEnd = Math.min(Math.max(line.end, holdUntil), clipEnd) - clipStart;
+      if (evEnd <= evStart) continue;
+      const text = line.words.map((w) => wordsText(w.text)).join(" ");
+      events.push(
+        `Dialogue: 1,${assTime(evStart)},${assTime(evEnd)},Caption,,0,0,0,,${text}`,
+      );
+      continue;
+    }
 
     for (let i = 0; i < line.words.length; i++) {
       const word = line.words[i];

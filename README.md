@@ -22,10 +22,17 @@ and OpenAI Whisper.
 - Central **9:16 canvas** with live hook banner, karaoke captions (active
   word highlighting), draggable stickers/watermarks, and blur-fill or
   crop framing — preview matches the export pixel-for-pixel.
-- **Caption engine** with style templates (Hormozi Bold, Minimalist Clean,
-  Chip Pop) plus per-field overrides (font size, colors, stroke, position,
-  words per line). Double-click any transcript word to correct it — captions
-  update instantly because they derive from the same word objects.
+- **Caption engine** with two rendering modes and four templates:
+  - *Phrase mode* — **Reels Clean** (the default): whole sentences in white
+    medium-weight sentence case wrap over 2–3 centered lines in the
+    upper-middle of the frame and hold on screen between phrases, matching
+    the classic Instagram Reels caption look.
+  - *Karaoke mode* — **Hormozi Bold**, **Minimal Karaoke**, **Chip Pop**:
+    short word groups with the spoken word highlighted.
+  Every field is tunable (font size/weight, colors, stroke, position, words
+  per caption, highlight on/off). Double-click any transcript word to
+  correct it — captions update instantly because they derive from the same
+  word objects.
 - **Multi-track timeline** (video / audio / text) with click-and-drag
   scrubbing, trim handles on the selected clip, drag-to-slide clip windows,
   and drag-to-retime caption lines. Zoomable px-per-second scale, real

@@ -65,13 +65,21 @@ export interface ClipFinderSettings {
 // Styling
 // ---------------------------------------------------------------------------
 
-export type CaptionTemplateId = "hormozi" | "clean" | "pop";
+export type CaptionTemplateId = "reels" | "hormozi" | "clean" | "pop";
 
 export interface CaptionStyle {
   template: CaptionTemplateId;
   fontFamily: string;
   /** Font size as a fraction of canvas height (resolution independent). */
   fontSize: number;
+  /** CSS font weight (400–900); maps to the ASS bold flag on export. */
+  fontWeight: number;
+  /**
+   * true  = karaoke mode: short word groups, active word highlighted.
+   * false = phrase mode: whole sentences wrap over 2–3 centered lines and
+   *         hold on screen between phrases (Instagram Reels style).
+   */
+  karaoke: boolean;
   uppercase: boolean;
   textColor: string;
   activeColor: string;

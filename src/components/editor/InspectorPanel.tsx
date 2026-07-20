@@ -120,7 +120,7 @@ export default function InspectorPanel() {
       {/* ---- caption style ------------------------------------------------ */}
       <section className="panel p-3">
         <h2 className="panel-title mb-2.5">Caption Style</h2>
-        <div className="mb-3 grid grid-cols-3 gap-1.5">
+        <div className="mb-3 grid grid-cols-2 gap-1.5">
           {(Object.keys(CAPTION_TEMPLATES) as CaptionTemplateId[]).map((id) => (
             <button
               key={id}
@@ -159,12 +159,21 @@ export default function InspectorPanel() {
             format={(v) => `${Math.round(v * 100)}%`}
           />
           <Slider
-            label="Words per line"
+            label="Words per caption"
             value={style.maxWordsPerLine}
             min={1}
-            max={7}
+            max={12}
             step={1}
             onChange={(v) => st().updateCaptionStyle({ maxWordsPerLine: v })}
+            format={(v) => String(v)}
+          />
+          <Slider
+            label="Font weight"
+            value={style.fontWeight}
+            min={400}
+            max={900}
+            step={100}
+            onChange={(v) => st().updateCaptionStyle({ fontWeight: v })}
             format={(v) => String(v)}
           />
           <div className="grid grid-cols-2 gap-2">
@@ -179,17 +188,33 @@ export default function InspectorPanel() {
               onChange={(v) => st().updateCaptionStyle({ activeColor: v })}
             />
           </div>
-          <label className="flex items-center gap-2 text-[11px] font-medium text-slate-400">
-            <input
-              type="checkbox"
-              className="accent-accent"
-              checked={style.uppercase}
-              onChange={(e) =>
-                st().updateCaptionStyle({ uppercase: e.target.checked })
-              }
-            />
-            UPPERCASE
-          </label>
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2 text-[11px] font-medium text-slate-400">
+              <input
+                type="checkbox"
+                className="accent-accent"
+                checked={style.uppercase}
+                onChange={(e) =>
+                  st().updateCaptionStyle({ uppercase: e.target.checked })
+                }
+              />
+              UPPERCASE
+            </label>
+            <label
+              className="flex items-center gap-2 text-[11px] font-medium text-slate-400"
+              title="On: short word groups with the spoken word highlighted. Off: whole phrases held on screen (Reels style)."
+            >
+              <input
+                type="checkbox"
+                className="accent-accent"
+                checked={style.karaoke}
+                onChange={(e) =>
+                  st().updateCaptionStyle({ karaoke: e.target.checked })
+                }
+              />
+              Word highlight
+            </label>
+          </div>
         </div>
       </section>
 
@@ -588,26 +613,32 @@ export default function InspectorPanel() {
 
 function TemplateSwatch({ id }: { id: CaptionTemplateId }) {
   const t = CAPTION_TEMPLATES[id];
+  const word = (w: string) => (t.uppercase ? w.toUpperCase() : w);
   return (
     <div className="flex h-8 items-center justify-center rounded bg-black/60">
       <span
-        className="font-caption text-[9px] leading-none"
+        className={clsx("text-[9px] leading-none", t.karaoke && "font-caption")}
         style={{
           color: t.textColor,
+          fontWeight: t.fontWeight,
           textShadow: t.strokeColor ? `1px 1px 0 ${t.strokeColor}` : undefined,
         }}
       >
-        MAKE{" "}
-        <span
-          style={{
-            color: t.activeColor,
-            backgroundColor: t.activeBgColor || undefined,
-            padding: t.activeBgColor ? "0 2px" : undefined,
-            borderRadius: 2,
-          }}
-        >
-          MONEY
-        </span>
+        {word("make")}{" "}
+        {t.karaoke ? (
+          <span
+            style={{
+              color: t.activeColor,
+              backgroundColor: t.activeBgColor || undefined,
+              padding: t.activeBgColor ? "0 2px" : undefined,
+              borderRadius: 2,
+            }}
+          >
+            {word("money")}
+          </span>
+        ) : (
+          word("money")
+        )}
       </span>
     </div>
   );

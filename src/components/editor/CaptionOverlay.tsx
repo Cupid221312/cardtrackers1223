@@ -18,16 +18,21 @@ export default function CaptionOverlay({
   const currentTime = useEditorStore((s) => s.currentTime);
   const clip = useSelectedClip();
 
-  const line = activeLineAt(lines, currentTime);
+  // Phrase mode holds finished lines on screen so text never flickers off
+  // between sentences (Reels style); karaoke mode tracks speech exactly.
+  const line = activeLineAt(lines, currentTime, style.karaoke ? 0 : 1.5);
   if (!line) return null;
   // Outside the selected clip the captions are not part of the deliverable.
   if (clip && (currentTime < clip.start - 0.05 || currentTime > clip.end + 0.05)) {
     return null;
   }
 
-  const activeIdx = activeWordIndex(line, currentTime);
+  const activeIdx = style.karaoke ? activeWordIndex(line, currentTime) : -1;
   const fontPx = Math.max(10, style.fontSize * canvasHeight);
   const strokePx = style.strokeWidth * fontPx;
+  const fontFallbacks = style.karaoke
+    ? '"Arial Black", Impact, sans-serif'
+    : "-apple-system, 'Helvetica Neue', sans-serif";
 
   return (
     <div
@@ -35,11 +40,11 @@ export default function CaptionOverlay({
       style={{ top: `${style.verticalPosition * 100}%` }}
     >
       <div
-        className="flex max-w-full flex-wrap items-center justify-center gap-x-[0.32em] text-center leading-tight"
+        className="flex max-w-[82%] flex-wrap items-center justify-center gap-x-[0.28em] text-center leading-snug"
         style={{
-          fontFamily: `"${style.fontFamily}", "Arial Black", Impact, sans-serif`,
+          fontFamily: `"${style.fontFamily}", ${fontFallbacks}`,
           fontSize: fontPx,
-          fontWeight: 800,
+          fontWeight: style.fontWeight,
         }}
       >
         {line.words.map((word, i) => {

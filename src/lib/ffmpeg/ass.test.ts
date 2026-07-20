@@ -41,6 +41,31 @@ describe("buildAssDocument", () => {
     expect(doc).toContain("\\c&H0000D4FF");
   });
 
+  it("emits one held event per line in phrase mode (Reels style)", () => {
+    const second: CaptionLine = {
+      id: "l1",
+      start: 14,
+      end: 15,
+      words: [{ id: "w2", text: "today", start: 14, end: 15 }],
+    };
+    const doc = buildAssDocument({
+      lines: [line, second],
+      style: CAPTION_TEMPLATES.reels,
+      banner: { ...banner, enabled: false },
+      clipStart: 10,
+      clipEnd: 40,
+    });
+    const dialogues = doc.split("\n").filter((l) => l.startsWith("Dialogue:"));
+    // Two lines → two events, no per-word events, no color overrides.
+    expect(dialogues).toHaveLength(2);
+    expect(doc).not.toContain("\\c&H");
+    // First line renders whole and holds until 13s (end 11.5 + 1.5 hold).
+    expect(dialogues[0]).toContain("make money");
+    expect(dialogues[0]).toContain("0:00:03.00");
+    // Sentence case preserved.
+    expect(doc).not.toContain("MAKE");
+  });
+
   it("skips lines outside the clip window and banner when disabled", () => {
     const doc = buildAssDocument({
       lines: [line],
