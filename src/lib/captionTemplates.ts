@@ -8,21 +8,23 @@ export const CAPTION_TEMPLATES: Record<CaptionTemplateId, CaptionStyle> = {
   // Instagram Reels "clean phrase" style: white medium-weight sentence-case
   // phrases in the upper-middle of the frame, thin outline + soft shadow,
   // no per-word highlighting.
+  // Calibrated against four creator reels: ~0.031×H font, weight 600,
+  // caption block ~22–28% from the top.
   reels: {
     template: "reels",
     fontFamily: "Inter",
-    fontSize: 0.028,
-    fontWeight: 500,
+    fontSize: 0.031,
+    fontWeight: 600,
     karaoke: false,
     uppercase: false,
     textColor: "#ffffff",
     activeColor: "#ffffff",
     activeBgColor: "",
     strokeColor: "#000000",
-    strokeWidth: 0.06,
+    strokeWidth: 0.07,
     shadow: true,
-    verticalPosition: 0.28,
-    maxWordsPerLine: 9,
+    verticalPosition: 0.24,
+    maxWordsPerLine: 8,
   },
   hormozi: {
     template: "hormozi",
