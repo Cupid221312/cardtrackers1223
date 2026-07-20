@@ -33,7 +33,7 @@ export default function SourcePanel() {
   const settings = useEditorStore((s) => s.clipFinderSettings);
   const selectedClipId = useEditorStore((s) => s.selectedClipId);
 
-  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
   const [recent, setRecent] = useState<SavedProjectSummary[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -73,16 +73,16 @@ export default function SourcePanel() {
     }
   }
 
-  async function handleYoutube() {
+  async function handleUrlImport() {
     const s = store.getState();
-    if (!youtubeUrl.trim()) return;
+    if (!linkUrl.trim()) return;
     s.setIngesting(true);
     try {
       const body = await readJsonOrThrow(
-        await fetch("/api/ingest/youtube", {
+        await fetch("/api/ingest/url", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: youtubeUrl.trim() }),
+          body: JSON.stringify({ url: linkUrl.trim() }),
         }),
       );
       const media: SourceMedia = {
@@ -214,17 +214,17 @@ export default function SourcePanel() {
         <div className="flex gap-1.5">
           <input
             className="text-input"
-            placeholder="Paste a YouTube URL…"
-            value={youtubeUrl}
-            onChange={(e) => setYoutubeUrl(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleYoutube()}
+            placeholder="YouTube / Twitch / Kick link…"
+            value={linkUrl}
+            onChange={(e) => setLinkUrl(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleUrlImport()}
             disabled={busy}
           />
           <button
             className="btn-ghost shrink-0 !px-2.5"
-            onClick={handleYoutube}
-            disabled={busy || !youtubeUrl.trim()}
-            aria-label="Import from YouTube"
+            onClick={handleUrlImport}
+            disabled={busy || !linkUrl.trim()}
+            aria-label="Import from link"
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current">
               <path d="M12 4a1 1 0 0 1 1 1v9.6l3.3-3.3a1 1 0 0 1 1.4 1.4l-5 5a1 1 0 0 1-1.4 0l-5-5a1 1 0 0 1 1.4-1.4L11 14.6V5a1 1 0 0 1 1-1Z" />

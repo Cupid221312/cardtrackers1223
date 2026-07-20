@@ -1,0 +1,17 @@
+# One-click deploy to Render (https://render.com).
+# A persistent disk is required because uploads/exports live on the
+# filesystem under /app/.data.
+services:
+  - type: web
+    name: clipforge-studio
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: standard # exports are CPU/RAM heavy; avoid the smallest instances
+    healthCheckPath: /
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false # optional — enables real Whisper + LLM clip titling
+    disk:
+      name: clipforge-data
+      mountPath: /app/.data
+      sizeGB: 10

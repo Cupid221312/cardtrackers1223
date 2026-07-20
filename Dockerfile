@@ -1,0 +1,42 @@
+# ---- deps ----------------------------------------------------------------
+FROM node:20-bookworm-slim AS deps
+WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN npm ci
+
+# ---- build ---------------------------------------------------------------
+FROM node:20-bookworm-slim AS build
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN npm run build
+
+# ---- runtime -------------------------------------------------------------
+FROM node:20-bookworm-slim AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+
+# System ffmpeg/ffprobe (used via FFMPEG_PATH/FFPROBE_PATH) and yt-dlp for
+# YouTube/Twitch/Kick link ingest.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ffmpeg python3 python3-pip ca-certificates \
+  && pip3 install --break-system-packages --no-cache-dir yt-dlp \
+  && apt-get clean && rm -rf /var/lib/apt/lists/*
+ENV FFMPEG_PATH=/usr/bin/ffmpeg
+ENV FFPROBE_PATH=/usr/bin/ffprobe
+
+# Next.js standalone server bundle + static assets.
+COPY --from=build /app/.next/standalone ./
+COPY --from=build /app/.next/static ./.next/static
+COPY --from=build /app/public ./public
+
+# Persist uploads, exports, projects, and derived caches across restarts by
+# mounting a volume at /app/.data.
+RUN mkdir -p /app/.data
+VOLUME ["/app/.data"]
+
+EXPOSE 3000
+CMD ["node", "server.js"]

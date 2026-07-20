@@ -58,16 +58,21 @@ export async function findMediaPath(id: string): Promise<string | null> {
 // ffmpeg / ffprobe binaries
 // ---------------------------------------------------------------------------
 
+/**
+ * Resolve the ffmpeg/ffprobe binaries. Priority:
+ *   1. FFMPEG_PATH / FFPROBE_PATH env (set in Docker to the system build).
+ *   2. the npm installer package (works out of the box for `npm run dev`).
+ *   3. bare `ffmpeg` / `ffprobe` on PATH.
+ * Next.js `output: standalone` doesn't always trace the installer's
+ * platform binary, so the env/PATH fallbacks keep exports working in
+ * containers where a system ffmpeg is present.
+ */
 export function ffmpegPath(): string {
-  if (!ffmpegInstaller?.path)
-    throw new Error("No ffmpeg binary available for this platform");
-  return ffmpegInstaller.path;
+  return process.env.FFMPEG_PATH || ffmpegInstaller?.path || "ffmpeg";
 }
 
 export function ffprobePath(): string {
-  if (!ffprobeInstaller?.path)
-    throw new Error("No ffprobe binary available for this platform");
-  return ffprobeInstaller.path;
+  return process.env.FFPROBE_PATH || ffprobeInstaller?.path || "ffprobe";
 }
 
 export interface MediaProbe {
