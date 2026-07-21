@@ -8,6 +8,8 @@ import {
 } from "@/lib/store/editorStore";
 import { CAPTION_TEMPLATES, TEMPLATE_LABELS } from "@/lib/captionTemplates";
 import { COLOR_GRADES, COLOR_GRADE_IDS } from "@/lib/colorGrades";
+import { findEnergyPeaks, peaksToZoomKeyframes } from "@/services/ai/audioEnergy";
+import { ASPECT_IDS } from "@/lib/aspects";
 import type { CaptionTemplateId } from "@/lib/types";
 import { formatTimecode } from "@/lib/time";
 import clsx from "clsx";
@@ -76,6 +78,7 @@ export default function InspectorPanel() {
   const style = useEditorStore((s) => s.captionStyle);
   const banner = useEditorStore((s) => s.hookBanner);
   const framing = useEditorStore((s) => s.framing);
+  const aspectRatio = useEditorStore((s) => s.aspectRatio);
   const filters = useEditorStore((s) => s.filters);
   const audio = useEditorStore((s) => s.audio);
   const silenceCut = useEditorStore((s) => s.silenceCut);
@@ -89,7 +92,32 @@ export default function InspectorPanel() {
   const musicInputRef = useRef<HTMLInputElement>(null);
   const [reframing, setReframing] = useState(false);
   const [reframeNote, setReframeNote] = useState("");
+  const [energyZooming, setEnergyZooming] = useState(false);
   const trackPicking = useEditorStore((s) => s.trackPicking);
+
+  async function autoZoomEnergy() {
+    if (!source || !clip) return;
+    setEnergyZooming(true);
+    setReframeNote("");
+    try {
+      const res = await fetch(`/api/media/${source.mediaId}/waveform`);
+      const body = await res.json();
+      const peaksArr: number[] = Array.isArray(body.peaks) ? body.peaks : [];
+      const found = findEnergyPeaks(peaksArr, source.duration, clip.start, clip.end);
+      if (found.length === 0) {
+        setReframeNote("No strong audio peaks found in this clip.");
+        return;
+      }
+      const kfs = peaksToZoomKeyframes(found, clip.start, clip.end);
+      st().updateFraming({ mode: "crop", panX: 0, panY: 0, zoom: 1 });
+      st().setKeyframes(clip.id, kfs);
+      setReframeNote(`Punch-in on ${found.length} hype moment${found.length === 1 ? "" : "s"}.`);
+    } catch {
+      setReframeNote("Audio-energy analysis failed.");
+    } finally {
+      setEnergyZooming(false);
+    }
+  }
 
   const st = () => useEditorStore.getState();
 
@@ -327,6 +355,27 @@ export default function InspectorPanel() {
       {/* ---- layout & framing --------------------------------------------- */}
       <section className="panel p-3">
         <h2 className="panel-title mb-2.5">Layout & Framing</h2>
+        <div className="mb-2.5">
+          <span className="mb-1 block text-[11px] font-medium text-slate-400">
+            Aspect ratio
+          </span>
+          <div className="grid grid-cols-3 gap-1.5">
+            {ASPECT_IDS.map((a) => (
+              <button
+                key={a}
+                onClick={() => st().setAspectRatio(a)}
+                className={clsx(
+                  "rounded-lg border px-1 py-1.5 text-[11px] font-medium transition",
+                  aspectRatio === a
+                    ? "border-accent/70 bg-accent/10 text-white"
+                    : "border-ink-700 bg-ink-900 text-slate-400 hover:border-ink-500",
+                )}
+              >
+                {a}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="mb-2.5 grid grid-cols-2 gap-1.5">
           <button
             className={clsx(
@@ -449,6 +498,14 @@ export default function InspectorPanel() {
           title="Alternate punch-in zoom on every caption line (Hormozi-style cuts)"
         >
           ⚡ Auto punch-in zooms
+        </button>
+        <button
+          className="btn-ghost mt-1.5 w-full !py-1.5 text-xs"
+          onClick={autoZoomEnergy}
+          disabled={!clip || !source || energyZooming}
+          title="Punch in on the loudest / hype moments (audio energy)"
+        >
+          {energyZooming ? "Analyzing audio…" : "🔊 Auto-zoom on energy"}
         </button>
         {reframeNote && (
           <p className="mt-1.5 text-[11px] text-slate-500">{reframeNote}</p>
@@ -704,7 +761,7 @@ export default function InspectorPanel() {
               }}
             />
             {audio.musicUrl && (
-              <div className="mt-2">
+              <div className="mt-2 flex flex-col gap-2">
                 <Slider
                   label="Music volume"
                   value={audio.musicVolume}
@@ -714,6 +771,15 @@ export default function InspectorPanel() {
                   onChange={(v) => st().updateAudio({ musicVolume: v })}
                   format={(v) => `${Math.round(v * 100)}%`}
                 />
+                <label className="flex items-center justify-between gap-2 text-[11px] font-medium text-slate-400">
+                  <span>Auto-duck under speech</span>
+                  <input
+                    type="checkbox"
+                    className="accent-accent"
+                    checked={audio.ducking}
+                    onChange={(e) => st().updateAudio({ ducking: e.target.checked })}
+                  />
+                </label>
               </div>
             )}
           </div>

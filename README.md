@@ -29,6 +29,13 @@ and OpenAI Whisper.
   the shortened timeline. The export modal shows the before/after length.
 - **Auto punch-in zooms**: one click alternates 1.0×/1.12× zoom per
   caption line for Hormozi-style cut energy (rendered via zoompan).
+- **Auto-zoom on energy**: detects the loudest/hype moments from the
+  decoded waveform and punches in on each — great for streams where the
+  excitement isn't in the words.
+- **Aspect ratios**: export **9:16**, **4:5** (IG feed), or **1:1**
+  (square) — the preview and the whole render pipeline follow the choice.
+- **Auto-duck music**: background music automatically dips under speech
+  (FFmpeg sidechaincompress).
 - **Cinematic color grades**: one-click looks (Warm, Cool, Vibrant, Moody,
   Vintage, B&W) rendered via FFmpeg colorbalance/curves/eq chains — with
   CSS approximations so the preview matches the burned export. Filter

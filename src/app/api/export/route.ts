@@ -86,6 +86,7 @@ const ExportSchema = z.object({
     volumeLeveling: z.boolean(),
     musicMediaId: z.string(),
     musicVolume: z.number().min(0).max(1),
+    ducking: z.boolean(),
   }),
   stickers: z.array(
     z.object({
@@ -104,6 +105,7 @@ const ExportSchema = z.object({
     color: z.string(),
     thickness: z.number().min(0).max(0.1),
   }),
+  aspectRatio: z.enum(["9:16", "4:5", "1:1"]),
   sourceWidth: z.number(),
   sourceHeight: z.number(),
 });

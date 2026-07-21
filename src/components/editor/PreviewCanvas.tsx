@@ -15,6 +15,7 @@ import ProgressBarOverlay from "@/components/editor/ProgressBarOverlay";
 import StickerLayer from "@/components/editor/StickerLayer";
 import { formatTime } from "@/lib/time";
 import { COLOR_GRADES } from "@/lib/colorGrades";
+import { aspectDims } from "@/lib/aspects";
 import {
   type TimeRange,
   computeKeepSegments,
@@ -31,6 +32,7 @@ import clsx from "clsx";
  */
 export default function PreviewCanvas() {
   const source = useEditorStore((s) => s.source);
+  const aspectRatio = useEditorStore((s) => s.aspectRatio);
   const framing = useEditorStore((s) => s.framing);
   const filters = useEditorStore((s) => s.filters);
   const audio = useEditorStore((s) => s.audio);
@@ -114,18 +116,23 @@ export default function PreviewCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [frameSize, setFrameSize] = useState({ width: 270, height: 480 });
 
-  // ---- fit the 9:16 frame into the available center area ------------------
+  // ---- fit the selected-aspect frame into the available center area -------
+  const dims = aspectDims(aspectRatio);
+  const frameAspect = dims.width / dims.height; // w/h
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const observer = new ResizeObserver(() => {
+    const fit = () => {
       const { width, height } = el.getBoundingClientRect();
-      const h = Math.min(height - 56, (width - 24) * (16 / 9));
-      setFrameSize({ height: h, width: h * (9 / 16) });
-    });
+      // Largest frame of this aspect that fits, capped by both axes.
+      const h = Math.min((height - 56), (width - 24) / frameAspect);
+      setFrameSize({ height: h, width: h * frameAspect });
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [frameAspect]);
 
   // ---- playback loop: video is the clock, store mirrors it ----------------
   useEffect(() => {
@@ -382,7 +389,7 @@ export default function PreviewCanvas() {
           </span>
         )}
         <span className="rounded border border-ink-600 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-slate-500">
-          9:16 · 1080×1920
+          {aspectRatio} · {dims.width}×{dims.height}
         </span>
         {trackStatus && (
           <span className="text-[11px] font-medium text-brand-yellow">

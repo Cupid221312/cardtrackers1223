@@ -89,6 +89,7 @@ export default function ExportQueueModal() {
         volumeLeveling: s.audio.volumeLeveling,
         musicMediaId: s.audio.musicMediaId,
         musicVolume: s.audio.musicVolume,
+        ducking: s.audio.ducking,
       },
       stickers: s.stickers.map((st) => ({
         dataUrl: st.dataUrl,
@@ -107,6 +108,7 @@ export default function ExportQueueModal() {
             )
           : [],
       progressBar: s.progressBar,
+      aspectRatio: s.aspectRatio,
       sourceWidth: s.source.width,
       sourceHeight: s.source.height,
     };

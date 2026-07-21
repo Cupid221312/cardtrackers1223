@@ -13,8 +13,8 @@ import { emojiFor, isKeyword } from "@/services/ai/captionDecor";
  * recolored inline) — exact and renderer-agnostic, unlike \k karaoke fill.
  */
 
-const PLAY_W = 1080;
-const PLAY_H = 1920;
+const DEFAULT_PLAY_W = 1080;
+const DEFAULT_PLAY_H = 1920;
 
 /** #rrggbb (+optional alpha 0..1) → ASS &HAABBGGRR& */
 function assColor(hex: string, alpha = 0): string {
@@ -58,8 +58,13 @@ export function buildAssDocument(opts: {
   progressBar?: ProgressBarSettings;
   /** Output-timeline duration (seconds); used to animate the progress bar. */
   outDuration?: number;
+  /** Output canvas size; defaults to 1080x1920 (9:16). */
+  playW?: number;
+  playH?: number;
 }): string {
   const { lines, style, banner, clipStart, clipEnd } = opts;
+  const PLAY_W = opts.playW ?? DEFAULT_PLAY_W;
+  const PLAY_H = opts.playH ?? DEFAULT_PLAY_H;
   const map = opts.timeMap ?? ((t: number) => t - clipStart);
   const outEnd = map(clipEnd);
 

@@ -22,6 +22,7 @@ import type {
   VisualFilters,
   ZoomKeyframe,
 } from "@/lib/types";
+import type { AspectRatio } from "@/lib/aspects";
 import { CAPTION_TEMPLATES } from "@/lib/captionTemplates";
 import { buildCaptionLines } from "@/services/ai/captions";
 import { overallScore, rateClip, sceneAnalysis } from "@/services/ai/rating";
@@ -52,6 +53,7 @@ interface EditorState {
   hookBanner: HookBanner;
   hookBannerEdited: boolean;
   framing: Framing;
+  aspectRatio: AspectRatio;
   filters: VisualFilters;
   audio: AudioSettings;
   silenceCut: SilenceCutSettings;
@@ -106,6 +108,7 @@ interface EditorState {
   updateCaptionStyle: (patch: Partial<CaptionStyle>) => void;
   updateHookBanner: (patch: Partial<HookBanner>) => void;
   updateFraming: (patch: Partial<Framing>) => void;
+  setAspectRatio: (a: AspectRatio) => void;
   updateFilters: (patch: Partial<VisualFilters>) => void;
   updateAudio: (patch: Partial<AudioSettings>) => void;
   updateSilenceCut: (patch: Partial<SilenceCutSettings>) => void;
@@ -141,6 +144,7 @@ const DEFAULT_AUDIO: AudioSettings = {
   musicMediaId: "",
   musicName: "",
   musicVolume: 0.15,
+  ducking: true,
 };
 
 /** Slice of state covered by undo/redo (creative decisions only). */
@@ -188,6 +192,7 @@ export const useEditorStore = create<EditorState>()(
   },
   hookBannerEdited: false,
   framing: { mode: "fit-blur", panX: 0, panY: 0, zoom: 1 },
+  aspectRatio: "9:16",
   filters: DEFAULT_FILTERS,
   audio: DEFAULT_AUDIO,
   silenceCut: { enabled: false, minGap: 0.6 },
@@ -495,6 +500,7 @@ export const useEditorStore = create<EditorState>()(
     })),
 
   updateFraming: (patch) => set((s) => ({ framing: { ...s.framing, ...patch } })),
+  setAspectRatio: (aspectRatio) => set({ aspectRatio }),
   updateFilters: (patch) => set((s) => ({ filters: { ...s.filters, ...patch } })),
   updateAudio: (patch) => set((s) => ({ audio: { ...s.audio, ...patch } })),
   updateSilenceCut: (patch) =>
@@ -562,6 +568,7 @@ export const useEditorStore = create<EditorState>()(
         captionStyle: s.captionStyle,
         clipFinderSettings: s.clipFinderSettings,
         framing: s.framing,
+        aspectRatio: s.aspectRatio,
         filters: s.filters,
         silenceCut: s.silenceCut,
         progressBar: s.progressBar,

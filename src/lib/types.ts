@@ -5,6 +5,7 @@
  */
 
 import type { ColorGradeId } from "@/lib/colorGrades";
+import type { AspectRatio } from "@/lib/aspects";
 
 // ---------------------------------------------------------------------------
 // Transcription
@@ -219,6 +220,8 @@ export interface AudioSettings {
   musicName: string;
   /** 0..1 gain applied to the background track. */
   musicVolume: number;
+  /** Auto-duck the music under speech (FFmpeg sidechaincompress). */
+  ducking: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -379,6 +382,7 @@ export interface ExportRequest {
     volumeLeveling: boolean;
     musicMediaId: string;
     musicVolume: number;
+    ducking: boolean;
   };
   stickers: Array<{
     dataUrl: string;
@@ -394,6 +398,7 @@ export interface ExportRequest {
    */
   keepSegments: Array<{ start: number; end: number }>;
   progressBar: ProgressBarSettings;
+  aspectRatio: AspectRatio;
   sourceWidth: number;
   sourceHeight: number;
 }

@@ -11,6 +11,7 @@ import {
   compactDuration,
   makeCompactMapper,
 } from "@/services/ai/silence";
+import { aspectDims } from "@/lib/aspects";
 import {
   EXPORT_DIR,
   ensureMediaDirs,
@@ -24,8 +25,6 @@ import {
  * reloads don't orphan running jobs.
  */
 
-const OUT_W = 1080;
-const OUT_H = 1920;
 const OUT_FPS = 60;
 
 const PRESETS: Record<ExportPreset, { crf: number; audioKbps: number; label: string }> = {
@@ -128,6 +127,8 @@ async function runJob(job: JobRecord): Promise<void> {
         timeMap,
         progressBar: request.progressBar,
         outDuration: outDur,
+        playW: aspectDims(request.aspectRatio).width,
+        playH: aspectDims(request.aspectRatio).height,
       }),
     );
 
@@ -199,6 +200,8 @@ function buildArgs(opts: {
   const { filters, audio, clip, preset } = request;
   const clipDur = clip.end - clip.start;
   const p = PRESETS[preset];
+  // Output canvas dimensions from the chosen aspect ratio.
+  const { width: OUT_W, height: OUT_H } = aspectDims(request.aspectRatio);
 
   // Keyframe times are clip-relative in SOURCE time; on a compacted
   // timeline they must land where their moment ends up after the cuts.
@@ -323,8 +326,22 @@ function buildArgs(opts: {
   if (musicPath) {
     chains.push(
       `[${musicIndex}:a]volume=${audio.musicVolume.toFixed(2)},atrim=0:${outDur.toFixed(3)}[am]`,
-      `[a0][am]amix=inputs=2:duration=first:normalize=0[aout]`,
     );
+    // amix averages inputs (sum/N); this old ffmpeg lacks `normalize`, so
+    // append volume=2 to turn the 2-input average back into a true sum —
+    // voice stays at full level, music at its set (and ducked) level.
+    if (audio.ducking) {
+      // Duck the music whenever there's speech: split the voice to use as
+      // both the sidechain trigger and a mix input, compress the music by
+      // it, then mix voice + ducked music.
+      chains.push(
+        `[a0]asplit=2[a0mix][a0side]`,
+        `[am][a0side]sidechaincompress=threshold=0.02:ratio=12:attack=8:release=350[amd]`,
+        `[a0mix][amd]amix=inputs=2:duration=first,volume=2[aout]`,
+      );
+    } else {
+      chains.push(`[a0][am]amix=inputs=2:duration=first,volume=2[aout]`);
+    }
     aLabel = "aout";
   }
 

@@ -33,6 +33,7 @@ export function buildProjectPayload(): SavedProject | null {
         musicMediaId: s.audio.musicMediaId,
         musicName: s.audio.musicName,
         musicVolume: s.audio.musicVolume,
+        ducking: s.audio.ducking,
       },
       silenceCut: s.silenceCut,
       stickers: s.stickers.map((st) => ({
