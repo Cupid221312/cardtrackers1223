@@ -29,6 +29,14 @@ and OpenAI Whisper.
   the shortened timeline. The export modal shows the before/after length.
 - **Auto punch-in zooms**: one click alternates 1.0×/1.12× zoom per
   caption line for Hormozi-style cut energy (rendered via zoompan).
+- **Cinematic color grades**: one-click looks (Warm, Cool, Vibrant, Moody,
+  Vintage, B&W) rendered via FFmpeg colorbalance/curves/eq chains — with
+  CSS approximations so the preview matches the burned export. Filter
+  recipes sourced from OpenMontage's color-grading skill, reimplemented in
+  TypeScript.
+- **Split at scenes**: detects hard cuts across the selected clip
+  (FFmpeg `select='gt(scene,t)'`, sourced from OpenMontage's scene_detect)
+  and splits the clip into shot-accurate segments in one click.
 - **Caption engine** with two rendering modes and five templates:
   - *Phrase mode* — **Reels Clean** (the default) and **Center Burst**:
     sentence-case white phrases that hold on screen between lines —

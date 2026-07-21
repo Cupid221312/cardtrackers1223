@@ -5,6 +5,7 @@ import crypto from "crypto";
 import type { ExportJobInfo, ExportPreset, ExportRequest } from "@/lib/types";
 import { buildAssDocument } from "@/lib/ffmpeg/ass";
 import { animatedCropFilter, zoompanFilter } from "@/lib/ffmpeg/keyframes";
+import { COLOR_GRADES } from "@/lib/colorGrades";
 import {
   type TimeRange,
   compactDuration,
@@ -228,7 +229,11 @@ function buildArgs(opts: {
   if (musicPath) args.push("-stream_loop", "-1", "-i", musicPath);
 
   // ---- video graph ------------------------------------------------------
-  const eq = `eq=brightness=${filters.brightness.toFixed(3)}:contrast=${filters.contrast.toFixed(3)}:saturation=${filters.saturation.toFixed(3)}`;
+  // User eq, then the optional cinematic grade chain (colorbalance/curves/…).
+  const gradeVf = COLOR_GRADES[filters.grade]?.vf ?? "";
+  const eq =
+    `eq=brightness=${filters.brightness.toFixed(3)}:contrast=${filters.contrast.toFixed(3)}:saturation=${filters.saturation.toFixed(3)}` +
+    (gradeVf ? `,${gradeVf}` : "");
   const chains: string[] = [];
 
   // Silence removal: drop frames/samples outside the keep segments and

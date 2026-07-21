@@ -66,6 +66,7 @@ const ExportSchema = z.object({
     contrast: z.number().min(0).max(3),
     saturation: z.number().min(0).max(3),
     backgroundBlur: z.number().min(0).max(100),
+    grade: z.enum(["none", "warm", "cool", "vibrant", "moody", "vintage", "bw"]),
   }),
   keyframes: z.array(
     z.object({

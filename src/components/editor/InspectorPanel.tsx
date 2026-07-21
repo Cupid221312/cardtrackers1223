@@ -7,6 +7,7 @@ import {
   useSelectedClipKeyframes,
 } from "@/lib/store/editorStore";
 import { CAPTION_TEMPLATES, TEMPLATE_LABELS } from "@/lib/captionTemplates";
+import { COLOR_GRADES, COLOR_GRADE_IDS } from "@/lib/colorGrades";
 import type { CaptionTemplateId } from "@/lib/types";
 import { formatTimecode } from "@/lib/time";
 import clsx from "clsx";
@@ -492,6 +493,29 @@ export default function InspectorPanel() {
             step={0.01}
             onChange={(v) => st().updateFilters({ saturation: v })}
           />
+        </div>
+
+        <div className="mt-3 border-t border-ink-700 pt-2.5">
+          <span className="mb-1.5 block text-[11px] font-medium text-slate-400">
+            Cinematic grade
+          </span>
+          <div className="grid grid-cols-3 gap-1.5">
+            {COLOR_GRADE_IDS.map((id) => (
+              <button
+                key={id}
+                onClick={() => st().updateFilters({ grade: id })}
+                className={clsx(
+                  "rounded-lg border px-1 py-1.5 text-[10px] font-medium transition",
+                  filters.grade === id
+                    ? "border-accent/70 bg-accent/10 text-white"
+                    : "border-ink-700 bg-ink-900 text-slate-400 hover:border-ink-500",
+                )}
+                title={COLOR_GRADES[id].label}
+              >
+                {COLOR_GRADES[id].label.replace("Cinematic ", "")}
+              </button>
+            ))}
+          </div>
         </div>
       </section>
 

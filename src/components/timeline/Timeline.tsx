@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useEditorStore, useSelectedClip } from "@/lib/store/editorStore";
 import TimeRuler from "@/components/timeline/TimeRuler";
 import VideoTrack from "@/components/timeline/VideoTrack";
@@ -26,6 +26,30 @@ export default function Timeline() {
 
   const duration = source?.duration ?? 0;
   const contentWidth = Math.max(200, duration * pxPerSec);
+  const [detectingScenes, setDetectingScenes] = useState(false);
+
+  const splitAtScenes = useCallback(async () => {
+    const s = useEditorStore.getState();
+    const c = s.clips.find((cl) => cl.id === s.selectedClipId);
+    if (!s.source || !c) return;
+    setDetectingScenes(true);
+    try {
+      const res = await fetch(`/api/media/${s.source.mediaId}/scenes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ start: c.start, end: c.end, threshold: 0.4 }),
+      });
+      const body = await res.json();
+      if (res.ok && Array.isArray(body.cuts) && body.cuts.length > 0) {
+        // Cuts are clip-relative; convert to source time.
+        s.splitClipAtTimes(c.id, body.cuts.map((t: number) => c.start + t));
+      }
+    } catch {
+      // best-effort; leave the clip as-is on failure
+    } finally {
+      setDetectingScenes(false);
+    }
+  }, []);
 
   // Follow the playhead during playback (only then, so manual browsing
   // never fights the auto-scroll).
@@ -110,6 +134,14 @@ export default function Timeline() {
             title="Split the selected clip at the playhead (S)"
           >
             ✂ Split
+          </button>
+          <button
+            className="rounded px-1.5 py-0.5 font-medium text-slate-300 transition hover:bg-ink-700 disabled:opacity-40"
+            onClick={splitAtScenes}
+            disabled={!clip || !source || detectingScenes}
+            title="Detect hard cuts in the clip and split on them"
+          >
+            {detectingScenes ? "Detecting…" : "⧉ Split at scenes"}
           </button>
         </div>
         <div className="flex items-center gap-2">

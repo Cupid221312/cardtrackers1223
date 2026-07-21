@@ -90,6 +90,8 @@ interface EditorState {
   addManualClip: () => void;
   /** Split a clip into two at a source-time inside it. */
   splitClip: (clipId: string, at: number) => void;
+  /** Split a clip into segments at multiple source-time cut points. */
+  splitClipAtTimes: (clipId: string, sourceTimes: number[]) => void;
   /** Hydrate a full editing session from a saved project. */
   restoreProject: (project: SavedProject) => void;
 
@@ -125,6 +127,7 @@ const DEFAULT_FILTERS: VisualFilters = {
   contrast: 1,
   saturation: 1,
   backgroundBlur: 24,
+  grade: "none",
 };
 
 const DEFAULT_AUDIO: AudioSettings = {
@@ -347,6 +350,59 @@ export const useEditorStore = create<EditorState>()(
       };
     }),
 
+  splitClipAtTimes: (clipId, sourceTimes) =>
+    set((s) => {
+      const clip = s.clips.find((c) => c.id === clipId);
+      if (!clip) return s;
+      // Boundaries: clip start, each in-range cut (min 2s apart), clip end.
+      const bounds = [clip.start];
+      for (const t of [...sourceTimes].sort((a, b) => a - b)) {
+        if (t > bounds[bounds.length - 1] + 2 && t < clip.end - 2) bounds.push(t);
+      }
+      bounds.push(clip.end);
+      if (bounds.length <= 2) return s; // no usable cut
+
+      const kfs = s.keyframesByClip[clipId] ?? [];
+      const keyframesByClip = { ...s.keyframesByClip };
+      delete keyframesByClip[clipId];
+
+      const segments: ClipCandidate[] = [];
+      for (let i = 0; i < bounds.length - 1; i++) {
+        const start = bounds[i];
+        const end = bounds[i + 1];
+        const id = `${clipId}-s${i}`;
+        const rating = s.transcript
+          ? rateClip(s.transcript.segments, start, end)
+          : clip.rating;
+        segments.push({
+          ...clip,
+          id,
+          start,
+          end,
+          title: i === 0 ? clip.title : `${clip.title.replace(/…$/, "")} (${i + 1})`.slice(0, 60),
+          rating,
+          score: overallScore(rating),
+          sceneAnalysis: s.transcript
+            ? sceneAnalysis(s.transcript.segments, start, end)
+            : clip.sceneAnalysis,
+        });
+        const rel = start - clip.start;
+        const segKfs = kfs
+          .filter((k) => k.time >= rel && k.time < end - clip.start)
+          .map((k) => ({ ...k, time: k.time - rel }));
+        if (segKfs.length > 0) keyframesByClip[id] = segKfs;
+      }
+
+      return {
+        clips: s.clips
+          .flatMap((c) => (c.id === clipId ? segments : [c]))
+          .sort((a, b) => a.start - b.start),
+        keyframesByClip,
+        selectedClipId:
+          s.selectedClipId === clipId ? segments[0].id : s.selectedClipId,
+      };
+    }),
+
   restoreProject: (project) => {
     const { state } = project;
     set({
@@ -372,7 +428,8 @@ export const useEditorStore = create<EditorState>()(
       hookBanner: state.hookBanner,
       hookBannerEdited: true, // restored banner text is authoritative
       framing: state.framing,
-      filters: state.filters,
+      // Default grade for projects saved before color grades existed.
+      filters: { ...DEFAULT_FILTERS, ...state.filters },
       audio: {
         ...state.audio,
         musicUrl: state.audio.musicMediaId

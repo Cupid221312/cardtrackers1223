@@ -4,6 +4,8 @@
  * video unless a field is explicitly documented otherwise.
  */
 
+import type { ColorGradeId } from "@/lib/colorGrades";
+
 // ---------------------------------------------------------------------------
 // Transcription
 // ---------------------------------------------------------------------------
@@ -169,6 +171,8 @@ export interface VisualFilters {
   saturation: number;
   /** Blur radius for the fit-blur background layer, in px at 1080p. */
   backgroundBlur: number;
+  /** One-click cinematic color grade id (see lib/colorGrades). */
+  grade: ColorGradeId;
 }
 
 // ---------------------------------------------------------------------------

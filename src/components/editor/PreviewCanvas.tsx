@@ -13,6 +13,7 @@ import CaptionOverlay from "@/components/editor/CaptionOverlay";
 import HookBannerOverlay from "@/components/editor/HookBannerOverlay";
 import StickerLayer from "@/components/editor/StickerLayer";
 import { formatTime } from "@/lib/time";
+import { COLOR_GRADES } from "@/lib/colorGrades";
 import {
   type TimeRange,
   computeKeepSegments,
@@ -252,7 +253,9 @@ export default function PreviewCanvas() {
     { zoom: framing.zoom, panX: framing.panX, panY: framing.panY },
   );
   const effZoom = kf.zoom;
-  const cssFilter = `brightness(${1 + filters.brightness}) contrast(${filters.contrast}) saturate(${filters.saturation})`;
+  const cssFilter =
+    `brightness(${1 + filters.brightness}) contrast(${filters.contrast}) saturate(${filters.saturation})` +
+    (COLOR_GRADES[filters.grade]?.css ? ` ${COLOR_GRADES[filters.grade].css}` : "");
 
   const foregroundStyle: React.CSSProperties = trackPicking
     ? // Picking mode: neutral full-frame view so the click maps 1:1 to
