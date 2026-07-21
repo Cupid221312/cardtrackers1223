@@ -2,6 +2,7 @@
 
 import { useEditorStore, useSelectedClip } from "@/lib/store/editorStore";
 import { activeLineAt, activeWordIndex } from "@/services/ai/captions";
+import { emojiFor, isKeyword } from "@/services/ai/captionDecor";
 import clsx from "clsx";
 
 /**
@@ -46,6 +47,8 @@ export default function CaptionOverlay({
           "flex max-w-[82%] flex-wrap items-center justify-center gap-x-[0.28em] text-center leading-snug",
           style.animation === "fade" && "caption-anim-fade",
           style.animation === "pop" && !style.karaoke && "caption-anim-pop",
+          style.animation === "slide" && "caption-anim-slide",
+          style.animation === "bounce" && "caption-anim-bounce",
         )}
         style={{
           fontFamily: `"${style.fontFamily}", ${fontFallbacks}`,
@@ -54,8 +57,18 @@ export default function CaptionOverlay({
         }}
       >
         {line.words.map((word, i) => {
+          // "reveal" animation: only show words spoken so far (karaoke).
+          if (style.animation === "reveal" && style.karaoke && i > activeIdx) {
+            return null;
+          }
           const isActive = i === activeIdx;
-          const color = isActive ? style.activeColor : style.textColor;
+          const keyword = style.highlightKeywords && isKeyword(word.text);
+          const color = isActive
+            ? style.activeColor
+            : keyword
+              ? style.accentColor
+              : style.textColor;
+          const emoji = style.autoEmoji ? emojiFor(word.text) : "";
           const shadowParts: string[] = [];
           if (strokePx > 0 && style.strokeColor) {
             // Multi-direction shadow fakes a heavy stroke more cleanly than
@@ -98,6 +111,7 @@ export default function CaptionOverlay({
               }}
             >
               {style.uppercase ? word.text.toUpperCase() : word.text}
+              {emoji ? ` ${emoji}` : ""}
             </span>
           );
         })}

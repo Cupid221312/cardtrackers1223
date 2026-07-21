@@ -36,7 +36,7 @@ const ExportSchema = z.object({
       fontSize: z.number().min(0.01).max(0.15),
       fontWeight: z.number().min(100).max(1000),
       karaoke: z.boolean(),
-      animation: z.enum(["none", "fade", "pop"]),
+      animation: z.enum(["none", "fade", "pop", "slide", "bounce", "reveal"]),
       uppercase: z.boolean(),
       textColor: z.string(),
       activeColor: z.string(),
@@ -46,6 +46,9 @@ const ExportSchema = z.object({
       shadow: z.boolean(),
       verticalPosition: z.number().min(0).max(1),
       maxWordsPerLine: z.number().int().min(1).max(12),
+      highlightKeywords: z.boolean(),
+      accentColor: z.string(),
+      autoEmoji: z.boolean(),
     }),
   }),
   hookBanner: z.object({
@@ -96,6 +99,11 @@ const ExportSchema = z.object({
   keepSegments: z
     .array(z.object({ start: z.number().min(0), end: z.number().positive() }))
     .max(200),
+  progressBar: z.object({
+    enabled: z.boolean(),
+    color: z.string(),
+    thickness: z.number().min(0).max(0.1),
+  }),
   sourceWidth: z.number(),
   sourceHeight: z.number(),
 });

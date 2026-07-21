@@ -92,8 +92,22 @@ export interface ClipFinderSettings {
 
 export type CaptionTemplateId = "reels" | "burst" | "hormozi" | "clean" | "pop";
 
-/** Entrance animation: phrase fade-in, or per-word pop on the highlight. */
-export type CaptionAnimation = "none" | "fade" | "pop";
+/**
+ * Caption entrance animation:
+ *  none   – appear instantly
+ *  fade   – fade in
+ *  pop    – scale pop on the highlight / phrase
+ *  slide  – slide up into place
+ *  bounce – scale overshoot then settle
+ *  reveal – karaoke word-by-word (only spoken words shown so far)
+ */
+export type CaptionAnimation =
+  | "none"
+  | "fade"
+  | "pop"
+  | "slide"
+  | "bounce"
+  | "reveal";
 
 export interface SilenceCutSettings {
   enabled: boolean;
@@ -127,6 +141,19 @@ export interface CaptionStyle {
   /** Vertical anchor of the caption block, 0 = top, 1 = bottom. */
   verticalPosition: number;
   maxWordsPerLine: number;
+  /** Auto-color emphasis words (numbers, power words) in accentColor. */
+  highlightKeywords: boolean;
+  /** Color used for keyword highlighting. */
+  accentColor: string;
+  /** Insert a relevant emoji after matched keywords. */
+  autoEmoji: boolean;
+}
+
+export interface ProgressBarSettings {
+  enabled: boolean;
+  color: string;
+  /** Bar thickness as a fraction of canvas height. */
+  thickness: number;
 }
 
 export interface HookBanner {
@@ -366,6 +393,7 @@ export interface ExportRequest {
    * caption/keyframe times accordingly.
    */
   keepSegments: Array<{ start: number; end: number }>;
+  progressBar: ProgressBarSettings;
   sourceWidth: number;
   sourceHeight: number;
 }

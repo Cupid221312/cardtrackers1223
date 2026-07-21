@@ -11,6 +11,7 @@ import {
 } from "@/lib/store/editorStore";
 import CaptionOverlay from "@/components/editor/CaptionOverlay";
 import HookBannerOverlay from "@/components/editor/HookBannerOverlay";
+import ProgressBarOverlay from "@/components/editor/ProgressBarOverlay";
 import StickerLayer from "@/components/editor/StickerLayer";
 import { formatTime } from "@/lib/time";
 import { COLOR_GRADES } from "@/lib/colorGrades";
@@ -326,6 +327,7 @@ export default function PreviewCanvas() {
               <>
                 <HookBannerOverlay canvasHeight={frameSize.height} />
                 <CaptionOverlay canvasHeight={frameSize.height} />
+                <ProgressBarOverlay canvasHeight={frameSize.height} />
               </>
             )}
             <StickerLayer />

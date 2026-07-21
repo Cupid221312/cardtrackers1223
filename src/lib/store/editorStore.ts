@@ -14,6 +14,7 @@ import type {
   Framing,
   HookBanner,
   SavedProject,
+  ProgressBarSettings,
   SilenceCutSettings,
   SourceMedia,
   Sticker,
@@ -54,6 +55,7 @@ interface EditorState {
   filters: VisualFilters;
   audio: AudioSettings;
   silenceCut: SilenceCutSettings;
+  progressBar: ProgressBarSettings;
   stickers: Sticker[];
   /** Zoom/pan keyframes keyed by clip id (times relative to clip start). */
   keyframesByClip: Record<string, ZoomKeyframe[]>;
@@ -107,6 +109,7 @@ interface EditorState {
   updateFilters: (patch: Partial<VisualFilters>) => void;
   updateAudio: (patch: Partial<AudioSettings>) => void;
   updateSilenceCut: (patch: Partial<SilenceCutSettings>) => void;
+  updateProgressBar: (patch: Partial<ProgressBarSettings>) => void;
   addSticker: (sticker: Sticker) => void;
   updateSticker: (id: string, patch: Partial<Sticker>) => void;
   removeSticker: (id: string) => void;
@@ -188,6 +191,7 @@ export const useEditorStore = create<EditorState>()(
   filters: DEFAULT_FILTERS,
   audio: DEFAULT_AUDIO,
   silenceCut: { enabled: false, minGap: 0.6 },
+  progressBar: { enabled: false, color: "#7c5cff", thickness: 0.008 },
   stickers: [],
   keyframesByClip: {},
 
@@ -495,6 +499,8 @@ export const useEditorStore = create<EditorState>()(
   updateAudio: (patch) => set((s) => ({ audio: { ...s.audio, ...patch } })),
   updateSilenceCut: (patch) =>
     set((s) => ({ silenceCut: { ...s.silenceCut, ...patch } })),
+  updateProgressBar: (patch) =>
+    set((s) => ({ progressBar: { ...s.progressBar, ...patch } })),
 
   addSticker: (sticker) => set((s) => ({ stickers: [...s.stickers, sticker] })),
   updateSticker: (id, patch) =>
@@ -558,6 +564,7 @@ export const useEditorStore = create<EditorState>()(
         framing: s.framing,
         filters: s.filters,
         silenceCut: s.silenceCut,
+        progressBar: s.progressBar,
         hookBanner: {
           enabled: s.hookBanner.enabled,
           bgColor: s.hookBanner.bgColor,
@@ -582,6 +589,7 @@ export const useEditorStore = create<EditorState>()(
           hookBanner: { ...current.hookBanner, ...p.hookBanner },
           audio: { ...current.audio, ...p.audio },
           silenceCut: { ...current.silenceCut, ...p.silenceCut },
+          progressBar: { ...current.progressBar, ...p.progressBar },
         };
       },
       },

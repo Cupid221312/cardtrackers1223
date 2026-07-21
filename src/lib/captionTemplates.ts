@@ -26,6 +26,9 @@ export const CAPTION_TEMPLATES: Record<CaptionTemplateId, CaptionStyle> = {
     shadow: true,
     verticalPosition: 0.24,
     maxWordsPerLine: 8,
+    highlightKeywords: false,
+    accentColor: "#ffd400",
+    autoEmoji: false,
   },
   // Seen in the Premiere-plugin reference (spec visible in its UI:
   // "Inter Bold · 64pt · 2 words"): tiny bold bursts dead-center.
@@ -45,6 +48,9 @@ export const CAPTION_TEMPLATES: Record<CaptionTemplateId, CaptionStyle> = {
     shadow: true,
     verticalPosition: 0.5,
     maxWordsPerLine: 2,
+    highlightKeywords: false,
+    accentColor: "#2dd4a0",
+    autoEmoji: false,
   },
   hormozi: {
     template: "hormozi",
@@ -62,6 +68,9 @@ export const CAPTION_TEMPLATES: Record<CaptionTemplateId, CaptionStyle> = {
     shadow: true,
     verticalPosition: 0.72,
     maxWordsPerLine: 4,
+    highlightKeywords: false,
+    accentColor: "#ffd400",
+    autoEmoji: false,
   },
   clean: {
     template: "clean",
@@ -79,6 +88,9 @@ export const CAPTION_TEMPLATES: Record<CaptionTemplateId, CaptionStyle> = {
     shadow: true,
     verticalPosition: 0.78,
     maxWordsPerLine: 5,
+    highlightKeywords: false,
+    accentColor: "#7c5cff",
+    autoEmoji: false,
   },
   pop: {
     template: "pop",
@@ -96,6 +108,9 @@ export const CAPTION_TEMPLATES: Record<CaptionTemplateId, CaptionStyle> = {
     shadow: false,
     verticalPosition: 0.74,
     maxWordsPerLine: 3,
+    highlightKeywords: false,
+    accentColor: "#2dd4a0",
+    autoEmoji: false,
   },
 };
 

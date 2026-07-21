@@ -126,6 +126,8 @@ async function runJob(job: JobRecord): Promise<void> {
         clipStart: request.clip.start,
         clipEnd: request.clip.end,
         timeMap,
+        progressBar: request.progressBar,
+        outDuration: outDur,
       }),
     );
 
@@ -305,6 +307,9 @@ function buildArgs(opts: {
     vLabel = next;
   });
 
+  // Progress bar and captions are both burned via the ASS file (libass
+  // animates the bar with \t, which is reliable across ffmpeg builds —
+  // unlike drawbox's time expressions in ffmpeg 4.x).
   chains.push(
     `[${vLabel}]subtitles='${filterPath(assPath)}',fps=${OUT_FPS},format=yuv420p[vout]`,
   );

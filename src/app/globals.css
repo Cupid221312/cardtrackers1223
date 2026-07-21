@@ -88,11 +88,38 @@ input[type="range"].slider::-moz-range-thumb {
     transform: scale(1);
   }
 }
+@keyframes caption-slide-in {
+  from {
+    transform: translateY(28%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+@keyframes caption-bounce-in {
+  0% {
+    transform: scale(0.7);
+  }
+  60% {
+    transform: scale(1.12);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
 .caption-anim-fade {
   animation: caption-fade-in 140ms ease-out;
 }
 .caption-anim-pop {
   animation: caption-pop-in 120ms ease-out;
+}
+.caption-anim-slide {
+  animation: caption-slide-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.caption-anim-bounce {
+  animation: caption-bounce-in 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .text-input {

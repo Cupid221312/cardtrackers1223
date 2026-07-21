@@ -106,6 +106,7 @@ export default function ExportQueueModal() {
               s.silenceCut.minGap,
             )
           : [],
+      progressBar: s.progressBar,
       sourceWidth: s.source.width,
       sourceHeight: s.source.height,
     };

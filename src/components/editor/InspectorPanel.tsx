@@ -79,6 +79,7 @@ export default function InspectorPanel() {
   const filters = useEditorStore((s) => s.filters);
   const audio = useEditorStore((s) => s.audio);
   const silenceCut = useEditorStore((s) => s.silenceCut);
+  const progressBar = useEditorStore((s) => s.progressBar);
   const stickers = useEditorStore((s) => s.stickers);
   const clip = useSelectedClip();
   const keyframes = useSelectedClipKeyframes();
@@ -196,21 +197,59 @@ export default function InspectorPanel() {
               Entrance animation
             </span>
             <div className="grid grid-cols-3 gap-1.5">
-              {(["none", "fade", "pop"] as const).map((anim) => (
-                <button
-                  key={anim}
-                  onClick={() => st().updateCaptionStyle({ animation: anim })}
-                  className={clsx(
-                    "rounded-lg border px-2 py-1 text-[11px] font-medium capitalize transition",
-                    style.animation === anim
-                      ? "border-accent/70 bg-accent/10 text-white"
-                      : "border-ink-700 bg-ink-900 text-slate-400 hover:border-ink-500",
-                  )}
-                >
-                  {anim}
-                </button>
-              ))}
+              {(["none", "fade", "pop", "slide", "bounce", "reveal"] as const).map(
+                (anim) => (
+                  <button
+                    key={anim}
+                    onClick={() => st().updateCaptionStyle({ animation: anim })}
+                    className={clsx(
+                      "rounded-lg border px-2 py-1 text-[11px] font-medium capitalize transition",
+                      style.animation === anim
+                        ? "border-accent/70 bg-accent/10 text-white"
+                        : "border-ink-700 bg-ink-900 text-slate-400 hover:border-ink-500",
+                    )}
+                    title={
+                      anim === "reveal"
+                        ? "Word-by-word appear (word-highlight mode)"
+                        : undefined
+                    }
+                  >
+                    {anim}
+                  </button>
+                ),
+              )}
             </div>
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="flex items-center justify-between gap-2 text-[11px] font-medium text-slate-400">
+              <span>Auto-highlight keywords</span>
+              <input
+                type="checkbox"
+                className="accent-accent"
+                checked={style.highlightKeywords}
+                onChange={(e) =>
+                  st().updateCaptionStyle({ highlightKeywords: e.target.checked })
+                }
+              />
+            </label>
+            {style.highlightKeywords && (
+              <ColorField
+                label="Highlight color"
+                value={style.accentColor}
+                onChange={(v) => st().updateCaptionStyle({ accentColor: v })}
+              />
+            )}
+            <label className="flex items-center justify-between gap-2 text-[11px] font-medium text-slate-400">
+              <span>Auto-emoji ✨</span>
+              <input
+                type="checkbox"
+                className="accent-accent"
+                checked={style.autoEmoji}
+                onChange={(e) =>
+                  st().updateCaptionStyle({ autoEmoji: e.target.checked })
+                }
+              />
+            </label>
           </div>
           <div className="flex items-center gap-4">
             <label className="flex items-center gap-2 text-[11px] font-medium text-slate-400">
@@ -516,6 +555,38 @@ export default function InspectorPanel() {
               </button>
             ))}
           </div>
+        </div>
+
+        <div className="mt-3 border-t border-ink-700 pt-2.5">
+          <label className="flex items-center justify-between gap-2 text-[11px] font-medium text-slate-400">
+            <span>Progress bar</span>
+            <input
+              type="checkbox"
+              className="accent-accent"
+              checked={progressBar.enabled}
+              onChange={(e) =>
+                st().updateProgressBar({ enabled: e.target.checked })
+              }
+            />
+          </label>
+          {progressBar.enabled && (
+            <div className="mt-2 flex flex-col gap-2">
+              <ColorField
+                label="Bar color"
+                value={progressBar.color}
+                onChange={(v) => st().updateProgressBar({ color: v })}
+              />
+              <Slider
+                label="Thickness"
+                value={progressBar.thickness}
+                min={0.003}
+                max={0.03}
+                step={0.001}
+                onChange={(v) => st().updateProgressBar({ thickness: v })}
+                format={(v) => `${Math.round(v * 1920)}px`}
+              />
+            </div>
+          )}
         </div>
       </section>
 

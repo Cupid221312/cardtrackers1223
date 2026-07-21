@@ -34,6 +34,9 @@ and OpenAI Whisper.
   CSS approximations so the preview matches the burned export. Filter
   recipes sourced from OpenMontage's color-grading skill, reimplemented in
   TypeScript.
+- **Progress bar**: an animated bottom bar that fills across the clip
+  (retention aid), burned via an ASS `\t` scale animation (reliable across
+  FFmpeg builds where drawbox time-expressions are not).
 - **Split at scenes**: detects hard cuts across the selected clip
   (FFmpeg `select='gt(scene,t)'`, sourced from OpenMontage's scene_detect)
   and splits the clip into shot-accurate segments in one click.
@@ -44,8 +47,10 @@ and OpenAI Whisper.
     Burst shows 2-word bold bursts dead-center.
   - *Karaoke mode* — **Hormozi Bold**, **Minimal Karaoke**, **Chip Pop**:
     short word groups with the spoken word highlighted.
-  Entrance animations (fade / pop) render identically in preview and in
-  the burned export (ASS `\fad` / scale transforms). Every field is
+  Entrance animations (fade / pop / slide / bounce / reveal — word-by-word)
+  render in preview and burned export. **Auto-highlight keywords** (color
+  emphasis words/numbers) and **auto-emoji** (drop themed emoji on keywords)
+  are one-toggle each. Every field is
   tunable (font size/weight, colors, stroke, position, words per caption,
   highlight on/off). Double-click any transcript word to correct it —
   captions update instantly because they derive from the same word
