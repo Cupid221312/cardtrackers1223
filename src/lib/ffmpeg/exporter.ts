@@ -1,4 +1,4 @@
-import { promises as fs } from "fs";
+import { promises as fs, existsSync } from "fs";
 import path from "path";
 import os from "os";
 import crypto from "crypto";
@@ -185,6 +185,33 @@ function filterPath(p: string): string {
   return p.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "\\'");
 }
 
+/**
+ * Directory holding the bundled caption fonts (Inter, Archivo Black). Passed
+ * to libass as `fontsdir` so burned captions use the exact same faces as the
+ * browser preview on every host — no reliance on system-installed fonts.
+ */
+let cachedFontsDir: string | null | undefined;
+function resolveFontsDir(): string | null {
+  if (cachedFontsDir !== undefined) return cachedFontsDir;
+  const candidates = [
+    process.env.FONTS_DIR,
+    path.join(process.cwd(), "public", "fonts"),
+    path.join(process.cwd(), "assets", "fonts"),
+  ].filter(Boolean) as string[];
+  for (const dir of candidates) {
+    try {
+      if (existsSync(path.join(dir, "Inter-Regular.ttf"))) {
+        cachedFontsDir = dir;
+        return dir;
+      }
+    } catch {
+      /* keep looking */
+    }
+  }
+  cachedFontsDir = null;
+  return null;
+}
+
 function buildArgs(opts: {
   request: ExportRequest;
   sourcePath: string;
@@ -314,8 +341,10 @@ function buildArgs(opts: {
   // Progress bar and captions are both burned via the ASS file (libass
   // animates the bar with \t, which is reliable across ffmpeg builds —
   // unlike drawbox's time expressions in ffmpeg 4.x).
+  const fontsDir = resolveFontsDir();
+  const fontsdirArg = fontsDir ? `:fontsdir='${filterPath(fontsDir)}'` : "";
   chains.push(
-    `[${vLabel}]subtitles='${filterPath(assPath)}',fps=${OUT_FPS},format=yuv420p[vout]`,
+    `[${vLabel}]subtitles='${filterPath(assPath)}'${fontsdirArg},fps=${OUT_FPS},format=yuv420p[vout]`,
   );
 
   // ---- audio graph ------------------------------------------------------

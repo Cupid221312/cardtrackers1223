@@ -926,7 +926,6 @@ export default function InspectorPanel() {
         <div className="grid grid-cols-2 gap-1.5">
           <button
             onClick={() => {
-              const clip = useSelectedClip();
               if (!clip) return;
               st().addOverlay({
                 id: `ov-${Date.now()}`,
@@ -948,7 +947,6 @@ export default function InspectorPanel() {
           </button>
           <button
             onClick={() => {
-              const clip = useSelectedClip();
               if (!clip) return;
               st().addOverlay({
                 id: `ov-${Date.now()}`,
@@ -970,7 +968,6 @@ export default function InspectorPanel() {
           </button>
           <button
             onClick={() => {
-              const clip = useSelectedClip();
               if (!clip) return;
               st().addOverlay({
                 id: `ov-${Date.now()}`,
@@ -992,7 +989,6 @@ export default function InspectorPanel() {
           </button>
           <button
             onClick={() => {
-              const clip = useSelectedClip();
               if (!clip) return;
               st().addOverlay({
                 id: `ov-${Date.now()}`,
@@ -1036,7 +1032,7 @@ export default function InspectorPanel() {
                   label="Start"
                   value={ov.start}
                   min={0}
-                  max={useSelectedClip()?.end ?? 60}
+                  max={clip?.end ?? 60}
                   step={0.05}
                   onChange={(v) => st().updateOverlay(ov.id, { start: v })}
                   format={(v) => formatTimecode(v)}

@@ -2,6 +2,31 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Caption faces, self-hosted so the browser preview renders with the exact
+   same fonts libass burns into the export (see public/fonts + the exporter's
+   fontsdir). No external webfont fetch — works fully offline. */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/Inter-Regular.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/Inter-Bold.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Archivo Black";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/ArchivoBlack-Regular.ttf") format("truetype");
+}
+
 :root {
   color-scheme: dark;
 }
