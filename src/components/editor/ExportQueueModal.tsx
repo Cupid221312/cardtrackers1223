@@ -98,6 +98,7 @@ export default function ExportQueueModal() {
         scale: st.scale,
         opacity: st.opacity,
       })),
+      overlays: s.overlays,
       keepSegments:
         s.silenceCut.enabled && s.transcript
           ? computeKeepSegments(

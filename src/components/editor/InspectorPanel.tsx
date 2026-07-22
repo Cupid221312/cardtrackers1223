@@ -919,6 +919,153 @@ export default function InspectorPanel() {
           ))}
         </div>
       </section>
+
+      {/* ---- animated graphic overlays ------------------------------------- */}
+      <section className="panel p-3">
+        <h2 className="panel-title mb-2.5">Motion Graphics</h2>
+        <div className="grid grid-cols-2 gap-1.5">
+          <button
+            onClick={() => {
+              const clip = useSelectedClip();
+              if (!clip) return;
+              st().addOverlay({
+                id: `ov-${Date.now()}`,
+                kind: "notification",
+                text: "New comment",
+                subtext: "@creator",
+                x: 0.5,
+                y: 0.3,
+                scale: 0.15,
+                color: "#ff0000",
+                rotation: 0,
+                start: clip.start,
+                end: clip.start + 2,
+              });
+            }}
+            className="btn-ghost !py-1.5 text-[10px]"
+          >
+            💬 Notification
+          </button>
+          <button
+            onClick={() => {
+              const clip = useSelectedClip();
+              if (!clip) return;
+              st().addOverlay({
+                id: `ov-${Date.now()}`,
+                kind: "subscribe",
+                text: "SUBSCRIBE",
+                subtext: "",
+                x: 0.5,
+                y: 0.8,
+                scale: 0.12,
+                color: "#ff0000",
+                rotation: 0,
+                start: clip.start,
+                end: clip.start + 2,
+              });
+            }}
+            className="btn-ghost !py-1.5 text-[10px]"
+          >
+            🔔 Subscribe
+          </button>
+          <button
+            onClick={() => {
+              const clip = useSelectedClip();
+              if (!clip) return;
+              st().addOverlay({
+                id: `ov-${Date.now()}`,
+                kind: "emoji",
+                text: "🔥",
+                subtext: "",
+                x: 0.7,
+                y: 0.3,
+                scale: 0.1,
+                color: "",
+                rotation: 0,
+                start: clip.start,
+                end: clip.start + 1.5,
+              });
+            }}
+            className="btn-ghost !py-1.5 text-[10px]"
+          >
+            🔥 Emoji
+          </button>
+          <button
+            onClick={() => {
+              const clip = useSelectedClip();
+              if (!clip) return;
+              st().addOverlay({
+                id: `ov-${Date.now()}`,
+                kind: "arrow",
+                text: "➜",
+                subtext: "",
+                x: 0.3,
+                y: 0.5,
+                scale: 0.1,
+                color: "#ffd400",
+                rotation: 0,
+                start: clip.start,
+                end: clip.start + 2,
+              });
+            }}
+            className="btn-ghost !py-1.5 text-[10px]"
+          >
+            ➜ Arrow
+          </button>
+        </div>
+        <div className="mt-2 flex flex-col gap-2">
+          {useEditorStore((s) => s.overlays).map((ov) => (
+            <div
+              key={ov.id}
+              className="rounded-lg border border-ink-700 bg-ink-900 p-2"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-medium text-slate-300">
+                  {ov.kind.toUpperCase()}: {ov.text}
+                </span>
+                <button
+                  className="text-slate-600 hover:text-brand-red"
+                  onClick={() => st().removeOverlay(ov.id)}
+                  aria-label="Remove overlay"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="mt-1 flex flex-col gap-1">
+                <Slider
+                  label="Start"
+                  value={ov.start}
+                  min={0}
+                  max={useSelectedClip()?.end ?? 60}
+                  step={0.05}
+                  onChange={(v) => st().updateOverlay(ov.id, { start: v })}
+                  format={(v) => formatTimecode(v)}
+                />
+                <Slider
+                  label="Duration"
+                  value={ov.end - ov.start}
+                  min={0.2}
+                  max={5}
+                  step={0.05}
+                  onChange={(v) => st().updateOverlay(ov.id, { end: ov.start + v })}
+                  format={(v) => `${v.toFixed(1)}s`}
+                />
+                {ov.kind !== "emoji" && (
+                  <input
+                    type="color"
+                    value={ov.color}
+                    onChange={(e) =>
+                      st().updateOverlay(ov.id, { color: e.target.value })
+                    }
+                    className="h-6 w-full cursor-pointer rounded"
+                    title="Overlay color"
+                  />
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }

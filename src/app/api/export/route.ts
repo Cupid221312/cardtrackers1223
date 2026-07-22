@@ -107,6 +107,23 @@ const ExportSchema = z.object({
       opacity: z.number().min(0).max(1),
     }),
   ),
+  overlays: z
+    .array(
+      z.object({
+        id: z.string(),
+        kind: z.enum(["notification", "subscribe", "emoji", "arrow"]),
+        text: z.string().max(100),
+        subtext: z.string().max(200),
+        x: z.number().min(0).max(1),
+        y: z.number().min(0).max(1),
+        scale: z.number().min(0.05).max(1),
+        color: z.string(),
+        rotation: z.number().min(-360).max(360),
+        start: z.number().min(0),
+        end: z.number().positive(),
+      }),
+    )
+    .max(100),
   keepSegments: z
     .array(z.object({ start: z.number().min(0), end: z.number().positive() }))
     .max(200),

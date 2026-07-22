@@ -255,6 +255,45 @@ export interface Sticker {
 }
 
 // ---------------------------------------------------------------------------
+// Animated graphic overlays (motion-graphics library)
+// ---------------------------------------------------------------------------
+
+/**
+ * A timed motion-graphic drawn over the clip:
+ *  notification – a titled card (comment / DM / alert lower-third)
+ *  subscribe    – a call-to-action pill button (Subscribe / Follow)
+ *  emoji        – a big reaction glyph that floats up and fades
+ *  arrow        – a pointer glyph that pops in (rotatable)
+ * Each pops/fades in the preview and burns into the export via the ASS track.
+ */
+export type GraphicOverlayKind =
+  | "notification"
+  | "subscribe"
+  | "emoji"
+  | "arrow";
+
+export interface GraphicOverlay {
+  id: string;
+  kind: GraphicOverlayKind;
+  /** Primary text: card title / button label / emoji glyph / arrow glyph. */
+  text: string;
+  /** Secondary text (notification body); ignored by other kinds. */
+  subtext: string;
+  /** Center position as fractions of canvas size, 0..1. */
+  x: number;
+  y: number;
+  /** Overall size as a fraction of canvas width. */
+  scale: number;
+  /** Accent color (card/pill fill, arrow tint). */
+  color: string;
+  /** Clockwise rotation in degrees (used by the arrow). */
+  rotation: number;
+  /** SOURCE-time window, seconds (mapped through silence cuts on export). */
+  start: number;
+  end: number;
+}
+
+// ---------------------------------------------------------------------------
 // Source media
 // ---------------------------------------------------------------------------
 
@@ -343,6 +382,7 @@ export interface SavedProject {
     /** Sticker preview urls are rebuilt from their data URLs on restore. */
     stickers: Array<Omit<Sticker, "url">>;
     keyframesByClip: Record<string, ZoomKeyframe[]>;
+    overlays?: GraphicOverlay[];
   };
 }
 
@@ -402,6 +442,8 @@ export interface ExportRequest {
     scale: number;
     opacity: number;
   }>;
+  /** Timed motion-graphic overlays burned in via the ASS track. */
+  overlays: GraphicOverlay[];
   /**
    * Source-time ranges to KEEP (silence removal). Empty = keep the whole
    * clip. When present, the renderer compacts the timeline and remaps

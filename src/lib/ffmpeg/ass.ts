@@ -1,6 +1,7 @@
 import type {
   CaptionLine,
   CaptionStyle,
+  GraphicOverlay,
   HookBanner,
   ProgressBarSettings,
 } from "@/lib/types";
@@ -56,6 +57,8 @@ export function buildAssDocument(opts: {
    */
   timeMap?: (t: number) => number;
   progressBar?: ProgressBarSettings;
+  /** Timed motion-graphic overlays (source-time, mapped like captions). */
+  overlays?: GraphicOverlay[];
   /** Output-timeline duration (seconds); used to animate the progress bar. */
   outDuration?: number;
   /** Output canvas size; defaults to 1080x1920 (9:16). */
@@ -96,6 +99,12 @@ export function buildAssDocument(opts: {
     `Style: Banner,${style.fontFamily},${bannerFontSize},${assColor(banner.textColor)},${assColor(banner.textColor)},${assColor(banner.bgColor)},${assColor(banner.bgColor)},-1,0,0,0,100,100,1,0,4,${Math.round(bannerFontSize * 0.3)},0,8,70,70,${bannerMarginV},1`,
     // Progress bar: plain fill style, drawn as a vector rectangle.
     `Style: Progress,Arial,20,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1`,
+    // Overlay (box): opaque box behind text — cards & CTA pills. Alignment 5
+    // = middle-center so \pos anchors on the graphic's center. Outline value
+    // pads the box around the text.
+    `Style: OvBox,${style.fontFamily},60,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,3,22,0,5,0,0,0,1`,
+    // Overlay (glyph): outlined text for emoji reactions & arrow pointers.
+    `Style: OvText,${style.fontFamily},60,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,4,6,5,0,0,0,1`,
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -123,6 +132,67 @@ export function buildAssDocument(opts: {
       `Dialogue: 0,${assTime(0)},${assTime(outEnd)},Progress,,0,0,0,,{\\an7\\pos(0,${y})\\1c${assColor("#000000")}\\1a&H80&\\bord0\\shad0\\p1}${rect}`,
       // animated fill
       `Dialogue: 0,${assTime(0)},${assTime(outEnd)},Progress,,0,0,0,,{\\an7\\pos(0,${y})\\1c${assColor(pb.color)}\\bord0\\shad0\\fscx0\\t(0,${ms},\\fscx100)\\p1}${rect}`,
+    );
+  }
+
+  // Motion-graphic overlays. Each pops + fades in at its center; source-time
+  // windows are mapped onto the output timeline like captions.
+  for (const ov of opts.overlays ?? []) {
+    const s = Math.max(ov.start, clipStart);
+    const e = Math.min(ov.end, clipEnd);
+    if (e <= s) continue;
+    const evStart = map(s);
+    const evEnd = map(e);
+    if (evEnd <= evStart + 0.05) continue;
+    const px = Math.round(ov.x * PLAY_W);
+    const py = Math.round(ov.y * PLAY_H);
+    const durMs = Math.round((evEnd - evStart) * 1000);
+    // Scale pop: shoot slightly past 100% then settle.
+    const pop = "\\fscx60\\fscy60\\t(0,140,\\fscx110\\fscy110)\\t(140,240,\\fscx100\\fscy100)";
+
+    if (ov.kind === "emoji") {
+      const fs = Math.max(24, Math.round(ov.scale * PLAY_W * 0.5));
+      const rise = Math.round(PLAY_H * 0.1);
+      // Floats upward across its window and fades at the tail.
+      const tag = `{\\an5\\move(${px},${py},${px},${py - rise},0,${durMs})\\fs${fs}\\fad(120,220)\\bord${Math.max(2, Math.round(fs * 0.04))}}`;
+      events.push(
+        `Dialogue: 4,${assTime(evStart)},${assTime(evEnd)},OvText,,0,0,0,,${tag}${escapeAss(ov.text || "🔥")}`,
+      );
+      continue;
+    }
+
+    if (ov.kind === "arrow") {
+      const fs = Math.max(24, Math.round(ov.scale * PLAY_W * 0.3));
+      // \frz is counter-clockwise, so negate to make `rotation` clockwise.
+      const rot = ov.rotation ? `\\frz${(-ov.rotation).toFixed(1)}` : "";
+      const tag = `{\\an5\\pos(${px},${py})${rot}\\fs${fs}\\1c${assColor(ov.color)}\\fad(120,120)${pop}}`;
+      events.push(
+        `Dialogue: 4,${assTime(evStart)},${assTime(evEnd)},OvText,,0,0,0,,${tag}${escapeAss(ov.text || "➜")}`,
+      );
+      continue;
+    }
+
+    // notification / subscribe: opaque box (card / pill).
+    const fs = Math.max(
+      18,
+      Math.round(ov.scale * PLAY_W * (ov.kind === "subscribe" ? 0.09 : 0.07)),
+    );
+    const boxColor = assColor(ov.color);
+    if (ov.kind === "subscribe") {
+      const tag = `{\\an5\\pos(${px},${py})\\fs${fs}\\b1\\3c${boxColor}\\4c${boxColor}\\1c${assColor("#ffffff")}\\fad(120,120)${pop}}`;
+      events.push(
+        `Dialogue: 4,${assTime(evStart)},${assTime(evEnd)},OvBox,,0,0,0,,${tag}${escapeAss((ov.text || "SUBSCRIBE").toUpperCase())}`,
+      );
+      continue;
+    }
+    // notification card: bold title, optional lighter body on a 2nd line.
+    const title = escapeAss(ov.text || "New comment");
+    const body = ov.subtext.trim()
+      ? `\\N{\\b0\\fs${Math.round(fs * 0.82)}}${escapeAss(ov.subtext.trim())}`
+      : "";
+    const tag = `{\\an5\\pos(${px},${py})\\fs${fs}\\b1\\3c${boxColor}\\4c${boxColor}\\1c${assColor("#ffffff")}\\fad(120,120)${pop}}`;
+    events.push(
+      `Dialogue: 4,${assTime(evStart)},${assTime(evEnd)},OvBox,,0,0,0,,${tag}${title}${body}`,
     );
   }
 

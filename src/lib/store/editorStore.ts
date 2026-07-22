@@ -12,6 +12,7 @@ import type {
   ClipFinderSettings,
   ExportJobInfo,
   Framing,
+  GraphicOverlay,
   HookBanner,
   SavedProject,
   ProgressBarSettings,
@@ -59,6 +60,7 @@ interface EditorState {
   silenceCut: SilenceCutSettings;
   progressBar: ProgressBarSettings;
   stickers: Sticker[];
+  overlays: GraphicOverlay[];
   /** Zoom/pan keyframes keyed by clip id (times relative to clip start). */
   keyframesByClip: Record<string, ZoomKeyframe[]>;
 
@@ -116,6 +118,9 @@ interface EditorState {
   addSticker: (sticker: Sticker) => void;
   updateSticker: (id: string, patch: Partial<Sticker>) => void;
   removeSticker: (id: string) => void;
+  addOverlay: (overlay: GraphicOverlay) => void;
+  updateOverlay: (id: string, patch: Partial<GraphicOverlay>) => void;
+  removeOverlay: (id: string) => void;
   addKeyframe: (clipId: string, kf: ZoomKeyframe) => void;
   removeKeyframe: (clipId: string, kfId: string) => void;
   /** Replace a clip's whole keyframe track (auto-reframe, clear). */
@@ -158,6 +163,7 @@ interface UndoableSlice {
   filters: EditorState["filters"];
   audio: EditorState["audio"];
   stickers: EditorState["stickers"];
+  overlays: EditorState["overlays"];
   keyframesByClip: EditorState["keyframesByClip"];
 }
 
@@ -198,6 +204,7 @@ export const useEditorStore = create<EditorState>()(
   silenceCut: { enabled: false, minGap: 0.6 },
   progressBar: { enabled: false, color: "#7c5cff", thickness: 0.008 },
   stickers: [],
+  overlays: [],
   keyframesByClip: {},
 
   pxPerSec: 12,
@@ -516,6 +523,16 @@ export const useEditorStore = create<EditorState>()(
   removeSticker: (id) =>
     set((s) => ({ stickers: s.stickers.filter((st) => st.id !== id) })),
 
+  addOverlay: (overlay) => set((s) => ({ overlays: [...s.overlays, overlay] })),
+  updateOverlay: (id, patch) =>
+    set((s) => ({
+      overlays: s.overlays.map((ov) =>
+        ov.id === id ? { ...ov, ...patch } : ov,
+      ),
+    })),
+  removeOverlay: (id) =>
+    set((s) => ({ overlays: s.overlays.filter((ov) => ov.id !== id) })),
+
   addKeyframe: (clipId, kf) =>
     set((s) => ({
       keyframesByClip: {
@@ -597,6 +614,7 @@ export const useEditorStore = create<EditorState>()(
           audio: { ...current.audio, ...p.audio },
           silenceCut: { ...current.silenceCut, ...p.silenceCut },
           progressBar: { ...current.progressBar, ...p.progressBar },
+          overlays: p.overlays ?? current.overlays,
         };
       },
       },
@@ -613,6 +631,7 @@ export const useEditorStore = create<EditorState>()(
         filters: s.filters,
         audio: s.audio,
         stickers: s.stickers,
+        overlays: s.overlays,
         keyframesByClip: s.keyframesByClip,
       }),
       // Updates are immutable, so reference-shallow equality is exact and

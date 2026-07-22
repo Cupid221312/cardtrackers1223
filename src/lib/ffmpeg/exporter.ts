@@ -125,6 +125,7 @@ async function runJob(job: JobRecord): Promise<void> {
         clipStart: request.clip.start,
         clipEnd: request.clip.end,
         timeMap,
+        overlays: request.overlays,
         progressBar: request.progressBar,
         outDuration: outDur,
         playW: aspectDims(request.aspectRatio).width,
