@@ -12,6 +12,13 @@ const SettingsSchema = z.object({
   maxClips: z.number().int().min(1).max(20),
 });
 
+const PeaksSchema = z
+  .object({
+    peaks: z.array(z.number()).max(20000).optional(),
+    peaksDuration: z.number().positive().optional(),
+  })
+  .optional();
+
 /**
  * Clip detection: deterministic heuristics always run; when OPENAI_API_KEY
  * is present the winners are re-titled/re-scored by an LLM for sharper
@@ -20,10 +27,12 @@ const SettingsSchema = z.object({
 export async function POST(req: NextRequest) {
   let transcript: Transcript;
   let settings: z.infer<typeof SettingsSchema>;
+  let audio: z.infer<typeof PeaksSchema>;
   try {
     const body = await req.json();
     transcript = body.transcript as Transcript;
     settings = SettingsSchema.parse(body.settings);
+    audio = PeaksSchema.parse(body.audio);
     if (!Array.isArray(transcript?.segments)) throw new Error("bad transcript");
   } catch {
     return NextResponse.json(
@@ -32,7 +41,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const clips = findClips(transcript, settings);
+  const clips = findClips(transcript, settings, {
+    peaks: audio?.peaks,
+    peaksDuration: audio?.peaksDuration,
+  });
 
   if (!process.env.OPENAI_API_KEY || clips.length === 0) {
     return NextResponse.json({ clips });

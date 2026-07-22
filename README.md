@@ -26,9 +26,22 @@ and OpenAI Whisper.
 - **Transcribe** with OpenAI Whisper (word-level timestamps). Without an
   `OPENAI_API_KEY` the app stays fully usable offline with a clearly-labeled
   demo transcript.
-- **Find viral clips**: deterministic hook/sentiment/topic-change heuristics
-  slice the source into 30–60 s candidates with scores and explanations;
-  with an API key the winners are re-titled and re-scored by an LLM.
+- **Find viral clips (transparent, credit-free formula)**: a deterministic
+  virality model scores every moment and grows the best seeds into
+  candidates — **no API key or credits required**. Four axes, each 0–100:
+  - **Hook** — pattern hits, a question, and emotional intensity in the
+    *first ~3 s* (the scroll-stopper), plus a loud audio start.
+  - **Value** — payoff / number / framework language + emotional substance.
+  - **Trend** — format & hype patterns + intensity + emphasis + audio energy.
+  - **Flow** — pacing *consistency* across segments + a ~38 s length sweet spot.
+  - `overall = 0.34·hook + 0.26·value + 0.22·trend + 0.18·flow`, shown as a
+    score and letter grade with a plain-English reason.
+  Sentiment comes from a tiny built-in lexicon (no model download), and when
+  the decoded **audio waveform** is available, loud/hype moments boost the
+  score so exciting stream & gaming clips surface even with no keyword hook.
+  With an optional `OPENAI_API_KEY` the winners are additionally re-titled and
+  re-scored by an LLM — but the formula above is the contract and runs 100%
+  offline.
 
 **Editor**
 

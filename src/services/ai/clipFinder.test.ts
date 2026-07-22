@@ -86,6 +86,33 @@ describe("findClips", () => {
     }
   });
 
+  it("surfaces a loud, textually-plain moment when audio energy is supplied", () => {
+    // All-filler transcript: no textual hooks anywhere.
+    const flat = [
+      "just a plain sentence about nothing much at all here",
+      "another equally plain sentence that keeps talking along",
+      "yet more ordinary words with no hook or excitement present",
+      "a fourth ordinary line continuing the calm narration here",
+      "and a fifth ordinary line to give the windows room to grow",
+    ];
+    const tr = makeTranscript(flat, 8); // 5 × 8s = 40s
+    // Energy spike concentrated around the 3rd segment (~16–24s).
+    const peaks = new Array(80).fill(0.1);
+    for (let i = 32; i <= 48; i++) peaks[i] = 1; // 16s..24s at 40s/80 buckets
+    const withEnergy = findClips(
+      tr,
+      { minDuration: 10, maxDuration: 20, maxClips: 3 },
+      { peaks, peaksDuration: 40 },
+    );
+    expect(withEnergy.length).toBeGreaterThan(0);
+    // The top clip should cover the loud moment.
+    const top = withEnergy[0];
+    expect(top.start).toBeLessThan(24);
+    expect(top.end).toBeGreaterThan(16);
+    // Its reason mentions the audio peak signal.
+    expect(withEnergy.some((c) => /audio peak/.test(c.reason))).toBe(true);
+  });
+
   it("handles an empty transcript", () => {
     expect(
       findClips(

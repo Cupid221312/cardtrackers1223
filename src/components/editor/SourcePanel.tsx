@@ -185,19 +185,44 @@ export default function SourcePanel() {
     const tr = t ?? s.transcript;
     if (!tr) return;
     s.setDetectingClips(true);
+
+    // Best-effort: pull the decoded waveform so loud/hype moments feed the
+    // scoring formula (helps stream/gaming clips with no textual hook).
+    let audio: { peaks?: number[]; peaksDuration?: number } | undefined;
+    if (s.source?.mediaId && s.source.duration) {
+      try {
+        const wf = await fetch(`/api/media/${s.source.mediaId}/waveform`);
+        if (wf.ok) {
+          const wb = await wf.json();
+          if (Array.isArray(wb.peaks) && wb.peaks.length) {
+            audio = { peaks: wb.peaks, peaksDuration: s.source.duration };
+          }
+        }
+      } catch {
+        /* no waveform — scoring falls back to text-only */
+      }
+    }
+
     try {
       const body = await readJsonOrThrow(
         await fetch("/api/clips/detect", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ transcript: tr, settings: s.clipFinderSettings }),
+          body: JSON.stringify({
+            transcript: tr,
+            settings: s.clipFinderSettings,
+            audio,
+          }),
         }),
       );
       s.setClips(body.clips as ClipCandidate[]);
       if (body.clips.length > 0) s.selectClip(body.clips[0].id);
     } catch {
       // Server route unavailable — heuristics run identically client-side.
-      const clips = findClips(tr, s.clipFinderSettings);
+      const clips = findClips(tr, s.clipFinderSettings, {
+        peaks: audio?.peaks,
+        peaksDuration: audio?.peaksDuration,
+      });
       s.setClips(clips);
       if (clips.length > 0) s.selectClip(clips[0].id);
     } finally {

@@ -1,14 +1,25 @@
 import type { ClipRating, LetterGrade, TranscriptSegment } from "@/lib/types";
+import { emphasisMarkers, sentimentIntensity } from "@/services/ai/sentiment";
 
 /**
  * Precision clip rating. Scores a clip on four independent axes the way
  * Opus/creator tools present them — Hook, Flow, Value, Trend — from the
- * transcript text and timing of the segments inside the clip window. Pure
- * and deterministic; the same signals the heuristic clip finder collects
- * are reused so the rating and the selection agree.
+ * transcript text/timing plus (optionally) the decoded audio energy of the
+ * window. Pure, deterministic, and fully offline (zero API credits).
+ *
+ * The virality formula (all sub-scores normalized to 0..100):
+ *   hook  = f(opening-3s pattern hits, opening question, opening emotional
+ *             intensity, audio energy at the start)   — the scroll-stopper
+ *   value = f(payoff/number/framework patterns, emotional intensity)
+ *   trend = f(format/hype patterns, emotional intensity, emphasis markers,
+ *             audio energy)
+ *   flow  = f(pacing consistency across segments, length sweet spot ~38s)
+ *   overall = 0.34·hook + 0.26·value + 0.22·trend + 0.18·flow
+ * Audio energy lets hype moments in streams (cheers, laughs, no keyword
+ * hook) still surface — text-only scoring would miss them.
  */
 
-const AXIS_WEIGHTS = { hook: 0.34, value: 0.28, trend: 0.2, flow: 0.18 };
+const AXIS_WEIGHTS = { hook: 0.34, value: 0.26, trend: 0.22, flow: 0.18 };
 
 const HOOK_PATTERNS: RegExp[] = [
   /\b(secret|nobody tells you|no one talks about)\b/i,
@@ -40,34 +51,74 @@ function scoreAxis(text: string, patterns: RegExp[], base: number): number {
   return Math.round(base + bonus);
 }
 
+export interface RateOptions {
+  /**
+   * Peak audio energy within the clip window, 0..1 (from the decoded
+   * waveform). Optional — when absent the score is text-only.
+   */
+  audioEnergy?: number;
+}
+
 export function rateClip(
   segments: TranscriptSegment[],
   start: number,
   end: number,
+  opts: RateOptions = {},
 ): ClipRating {
   const inClip = segments.filter((s) => s.end > start && s.start < end);
   const text = inClip.map((s) => s.text).join(" ");
-  const opening = inClip.slice(0, 2).map((s) => s.text).join(" ");
+  // "Opening" = whatever is spoken in the first ~3.5s — the scroll-stopper
+  // window that decides if a viewer stays.
+  const opening = inClip
+    .filter((s) => s.start < start + 3.5)
+    .map((s) => s.text)
+    .join(" ") || (inClip[0]?.text ?? "");
   const dur = Math.max(end - start, 1);
+  const energy = clamp01(opts.audioEnergy ?? 0);
 
-  // Hook leans on the opening lines specifically.
-  const hook = Math.min(
-    99,
-    scoreAxis(opening, HOOK_PATTERNS, 45) + (/\?/.test(opening) ? 6 : 0),
+  // --- Hook: opening patterns + opening question + opening emotion + a loud
+  //     start (energy). This is weighted toward the first seconds on purpose.
+  const hook = clampScore(
+    scoreAxis(opening, HOOK_PATTERNS, 42) +
+      (/\?/.test(opening) ? 6 : 0) +
+      sentimentIntensity(opening) * 18 +
+      energy * 10,
   );
 
-  const value = Math.min(99, scoreAxis(text, VALUE_PATTERNS, 48));
-  const trend = Math.min(99, scoreAxis(text, TREND_PATTERNS, 44));
+  // --- Value: payoff/number/framework patterns + emotional substance.
+  const value = clampScore(
+    scoreAxis(text, VALUE_PATTERNS, 46) + sentimentIntensity(text) * 12,
+  );
 
-  // Flow rewards steady speech density and a clip length in the sweet spot
-  // (~30–50s), penalizing very long or choppy windows.
-  const wordCount = inClip.reduce((n, s) => n + s.wordIds.length, 0);
-  const density = wordCount / dur; // words/sec
-  const densityScore = 100 - Math.min(60, Math.abs(density - 2.6) * 22);
-  const lengthScore = 100 - Math.min(50, Math.abs(dur - 40) * 1.4);
-  const flow = Math.round(Math.max(40, densityScore * 0.55 + lengthScore * 0.45));
+  // --- Trend: format/hype patterns + emotional intensity + emphasis + energy.
+  const trend = clampScore(
+    scoreAxis(text, TREND_PATTERNS, 42) +
+      sentimentIntensity(text) * 22 +
+      Math.min(8, emphasisMarkers(text) * 3) +
+      energy * 12,
+  );
+
+  // --- Flow: pacing *consistency* across segments (jittery delivery reads as
+  //     choppy) plus a length sweet spot around ~38s.
+  const rates = inClip.map(
+    (s) => s.wordIds.length / Math.max(s.end - s.start, 0.3),
+  );
+  const mean = rates.reduce((a, b) => a + b, 0) / Math.max(rates.length, 1);
+  const variance =
+    rates.reduce((a, r) => a + (r - mean) ** 2, 0) / Math.max(rates.length, 1);
+  const cv = mean > 0 ? Math.sqrt(variance) / mean : 0; // coeff. of variation
+  const consistency = 100 - Math.min(60, cv * 80);
+  const lengthScore = 100 - Math.min(50, Math.abs(dur - 38) * 1.4);
+  const flow = Math.round(Math.max(40, consistency * 0.5 + lengthScore * 0.5));
 
   return { hook, flow, value, trend };
+}
+
+function clamp01(v: number): number {
+  return Math.max(0, Math.min(1, v));
+}
+function clampScore(v: number): number {
+  return Math.max(0, Math.min(99, Math.round(v)));
 }
 
 export function overallScore(rating: ClipRating): number {

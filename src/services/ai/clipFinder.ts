@@ -13,12 +13,42 @@ import {
 
 /**
  * Heuristic viral-moment detector. Scores every transcript segment on
- * conversational hooks, sentiment intensity, and topic-change signals,
- * then grows the best seeds into 30–60s windows aligned to segment
- * boundaries. Pure and deterministic so it runs identically on client
- * and server; the /api/clips/detect route can optionally re-rank and
+ * conversational hooks, sentiment intensity, topic-change signals, and
+ * (optionally) audio energy, then grows the best seeds into windows aligned
+ * to segment boundaries. Pure and deterministic so it runs identically on
+ * client and server; the /api/clips/detect route can optionally re-rank and
  * re-title the winners with an LLM when OPENAI_API_KEY is present.
+ *
+ * Audio energy is optional: when the decoded waveform is available, loud
+ * moments (cheers, laughs, hype) boost seed scores so exciting stream/gaming
+ * clips surface even when the words alone aren't "hooky".
  */
+
+export interface ClipFinderInputs {
+  /** Decoded waveform amplitude buckets, evenly spaced across the source. */
+  peaks?: number[];
+  /** Total seconds the peaks span (source duration). */
+  peaksDuration?: number;
+}
+
+/** Max normalized (0..1) audio energy in a [start,end) window. */
+function windowEnergy(
+  start: number,
+  end: number,
+  peaks: number[] | undefined,
+  totalDur: number | undefined,
+  peakMax: number,
+): number {
+  if (!peaks || peaks.length === 0 || !totalDur || totalDur <= 0 || peakMax <= 0) {
+    return 0;
+  }
+  const per = totalDur / peaks.length;
+  const from = Math.max(0, Math.floor(start / per));
+  const to = Math.min(peaks.length - 1, Math.ceil(end / per));
+  let m = 0;
+  for (let i = from; i <= to; i++) m = Math.max(m, peaks[i]);
+  return Math.max(0, Math.min(1, m / peakMax));
+}
 
 const HOOK_PATTERNS: Array<{ re: RegExp; weight: number; label: string }> = [
   { re: /\b(secret|nobody tells you|no one talks about)\b/i, weight: 22, label: "curiosity hook" },
@@ -116,13 +146,25 @@ function makeTitle(segment: TranscriptSegment): string {
 export function findClips(
   transcript: Transcript,
   settings: ClipFinderSettings,
+  inputs: ClipFinderInputs = {},
 ): ClipCandidate[] {
   const { segments } = transcript;
   if (segments.length === 0) return [];
 
-  const scored = segments.map((seg, i) =>
-    scoreSegment(seg, i > 0 ? segments[i - 1] : null),
-  );
+  const peaks = inputs.peaks;
+  const peaksDuration = inputs.peaksDuration;
+  const peakMax = peaks && peaks.length ? Math.max(...peaks) : 0;
+
+  const scored = segments.map((seg, i) => {
+    const s = scoreSegment(seg, i > 0 ? segments[i - 1] : null);
+    // Loud moments boost the seed even without a textual hook.
+    const energy = windowEnergy(seg.start, seg.end, peaks, peaksDuration, peakMax);
+    if (energy > 0.55) {
+      s.score += Math.round(energy * 16);
+      s.labels.push("audio peak");
+    }
+    return s;
+  });
 
   const seeds = scored
     .map((s, i) => ({ ...s, index: i }))
@@ -149,7 +191,16 @@ export function findClips(
     used.push([win.start, win.end]);
 
     const uniqueLabels = [...new Set(win.labels)];
-    const rating = rateClip(segments, win.start, win.end);
+    const clipEnergy = windowEnergy(
+      win.start,
+      win.end,
+      peaks,
+      peaksDuration,
+      peakMax,
+    );
+    const rating = rateClip(segments, win.start, win.end, {
+      audioEnergy: clipEnergy,
+    });
     const clipText = segments
       .filter((s) => s.end > win.start && s.start < win.end)
       .map((s) => s.text)
