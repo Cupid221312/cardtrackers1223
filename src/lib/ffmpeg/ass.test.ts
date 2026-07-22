@@ -66,6 +66,43 @@ describe("buildAssDocument", () => {
     expect(doc).not.toContain("MAKE");
   });
 
+  it("two-tone alternates word colors by position", () => {
+    const doc = buildAssDocument({
+      lines: [line],
+      // Phrase mode so both words render in one event with base colors.
+      style: { ...CAPTION_TEMPLATES.reels, twoTone: true, accentColor: "#2dd4a0" },
+      banner: { ...banner, enabled: false },
+      clipStart: 10,
+      clipEnd: 40,
+    });
+    const ev = doc.split("\n").find((l) => l.startsWith("Dialogue:"))!;
+    // Word 0 → text color white (&H00FFFFFF), word 1 → accent (#2dd4a0 → &H00A0D42D).
+    expect(ev).toContain("\\c&H00FFFFFF");
+    expect(ev).toContain("\\c&H00A0D42D");
+  });
+
+  it("typewriter reveals the active word letter-by-letter", () => {
+    const doc = buildAssDocument({
+      lines: [line],
+      style: {
+        ...CAPTION_TEMPLATES.hormozi,
+        animation: "typewriter",
+        maxWordsPerLine: 1,
+      },
+      banner: { ...banner, enabled: false },
+      clipStart: 10,
+      clipEnd: 40,
+    });
+    const dialogues = doc.split("\n").filter((l) => l.startsWith("Dialogue:"));
+    // "make" (4 letters) + "money" (5 letters) each expand into several
+    // letter-step events → far more than the 2 plain karaoke events.
+    expect(dialogues.length).toBeGreaterThan(4);
+    // A partial reveal hides its tail via full alpha.
+    expect(doc).toContain("\\alpha&HFF&");
+    // The first letter of the first active word appears alone, tail hidden.
+    expect(doc).toContain("M{\\alpha&HFF&}AKE");
+  });
+
   it("skips lines outside the clip window and banner when disabled", () => {
     const doc = buildAssDocument({
       lines: [line],

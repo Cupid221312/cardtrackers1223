@@ -29,6 +29,8 @@ export const CAPTION_TEMPLATES: Record<CaptionTemplateId, CaptionStyle> = {
     highlightKeywords: false,
     accentColor: "#ffd400",
     autoEmoji: false,
+    twoTone: false,
+    boxColor: "",
   },
   // Seen in the Premiere-plugin reference (spec visible in its UI:
   // "Inter Bold · 64pt · 2 words"): tiny bold bursts dead-center.
@@ -51,6 +53,8 @@ export const CAPTION_TEMPLATES: Record<CaptionTemplateId, CaptionStyle> = {
     highlightKeywords: false,
     accentColor: "#2dd4a0",
     autoEmoji: false,
+    twoTone: false,
+    boxColor: "",
   },
   hormozi: {
     template: "hormozi",
@@ -71,6 +75,8 @@ export const CAPTION_TEMPLATES: Record<CaptionTemplateId, CaptionStyle> = {
     highlightKeywords: false,
     accentColor: "#ffd400",
     autoEmoji: false,
+    twoTone: false,
+    boxColor: "",
   },
   clean: {
     template: "clean",
@@ -91,6 +97,8 @@ export const CAPTION_TEMPLATES: Record<CaptionTemplateId, CaptionStyle> = {
     highlightKeywords: false,
     accentColor: "#7c5cff",
     autoEmoji: false,
+    twoTone: false,
+    boxColor: "",
   },
   pop: {
     template: "pop",
@@ -111,6 +119,33 @@ export const CAPTION_TEMPLATES: Record<CaptionTemplateId, CaptionStyle> = {
     highlightKeywords: false,
     accentColor: "#2dd4a0",
     autoEmoji: false,
+    twoTone: false,
+    boxColor: "",
+  },
+  // Kinetic typography: one big word at a time, dead-center on a clean
+  // background, scaling/typing in for punch. Seen across the fast-cut
+  // reference reels — a single dominant word per beat drives the pacing.
+  kinetic: {
+    template: "kinetic",
+    fontFamily: "Archivo Black",
+    fontSize: 0.062,
+    fontWeight: 800,
+    karaoke: true,
+    animation: "typewriter",
+    uppercase: true,
+    textColor: "#ffffff",
+    activeColor: "#ffd400",
+    activeBgColor: "",
+    strokeColor: "#000000",
+    strokeWidth: 0.09,
+    shadow: true,
+    verticalPosition: 0.46,
+    maxWordsPerLine: 1,
+    highlightKeywords: false,
+    accentColor: "#ffd400",
+    autoEmoji: false,
+    twoTone: false,
+    boxColor: "",
   },
 };
 
@@ -120,4 +155,5 @@ export const TEMPLATE_LABELS: Record<CaptionTemplateId, string> = {
   hormozi: "Hormozi Bold",
   clean: "Minimal Karaoke",
   pop: "Chip Pop",
+  kinetic: "Kinetic",
 };

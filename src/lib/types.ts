@@ -91,7 +91,13 @@ export interface ClipFinderSettings {
 // Styling
 // ---------------------------------------------------------------------------
 
-export type CaptionTemplateId = "reels" | "burst" | "hormozi" | "clean" | "pop";
+export type CaptionTemplateId =
+  | "reels"
+  | "burst"
+  | "hormozi"
+  | "clean"
+  | "pop"
+  | "kinetic";
 
 /**
  * Caption entrance animation:
@@ -108,7 +114,8 @@ export type CaptionAnimation =
   | "pop"
   | "slide"
   | "bounce"
-  | "reveal";
+  | "reveal"
+  | "typewriter";
 
 export interface SilenceCutSettings {
   enabled: boolean;
@@ -148,6 +155,10 @@ export interface CaptionStyle {
   accentColor: string;
   /** Insert a relevant emoji after matched keywords. */
   autoEmoji: boolean;
+  /** Alternate word colors between textColor and accentColor. */
+  twoTone: boolean;
+  /** Solid rounded box behind the caption block ('' = none). */
+  boxColor: string;
 }
 
 export interface ProgressBarSettings {

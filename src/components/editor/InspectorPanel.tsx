@@ -225,27 +225,37 @@ export default function InspectorPanel() {
               Entrance animation
             </span>
             <div className="grid grid-cols-3 gap-1.5">
-              {(["none", "fade", "pop", "slide", "bounce", "reveal"] as const).map(
-                (anim) => (
-                  <button
-                    key={anim}
-                    onClick={() => st().updateCaptionStyle({ animation: anim })}
-                    className={clsx(
-                      "rounded-lg border px-2 py-1 text-[11px] font-medium capitalize transition",
-                      style.animation === anim
-                        ? "border-accent/70 bg-accent/10 text-white"
-                        : "border-ink-700 bg-ink-900 text-slate-400 hover:border-ink-500",
-                    )}
-                    title={
-                      anim === "reveal"
-                        ? "Word-by-word appear (word-highlight mode)"
+              {(
+                [
+                  "none",
+                  "fade",
+                  "pop",
+                  "slide",
+                  "bounce",
+                  "reveal",
+                  "typewriter",
+                ] as const
+              ).map((anim) => (
+                <button
+                  key={anim}
+                  onClick={() => st().updateCaptionStyle({ animation: anim })}
+                  className={clsx(
+                    "rounded-lg border px-2 py-1 text-[11px] font-medium capitalize transition",
+                    style.animation === anim
+                      ? "border-accent/70 bg-accent/10 text-white"
+                      : "border-ink-700 bg-ink-900 text-slate-400 hover:border-ink-500",
+                  )}
+                  title={
+                    anim === "reveal"
+                      ? "Word-by-word appear (word-highlight mode)"
+                      : anim === "typewriter"
+                        ? "Type the active word letter-by-letter (word-highlight mode)"
                         : undefined
-                    }
-                  >
-                    {anim}
-                  </button>
-                ),
-              )}
+                  }
+                >
+                  {anim}
+                </button>
+              ))}
             </div>
           </div>
           <div className="flex flex-col gap-2">
@@ -278,6 +288,50 @@ export default function InspectorPanel() {
                 }
               />
             </label>
+            <label
+              className="flex items-center justify-between gap-2 text-[11px] font-medium text-slate-400"
+              title="Alternate word colors between the text color and the accent color."
+            >
+              <span>Two-tone words</span>
+              <input
+                type="checkbox"
+                className="accent-accent"
+                checked={style.twoTone}
+                onChange={(e) =>
+                  st().updateCaptionStyle({ twoTone: e.target.checked })
+                }
+              />
+            </label>
+            {style.twoTone && (
+              <ColorField
+                label="Second color"
+                value={style.accentColor}
+                onChange={(v) => st().updateCaptionStyle({ accentColor: v })}
+              />
+            )}
+            <label
+              className="flex items-center justify-between gap-2 text-[11px] font-medium text-slate-400"
+              title="Solid rounded box behind the caption block."
+            >
+              <span>Caption box</span>
+              <input
+                type="checkbox"
+                className="accent-accent"
+                checked={!!style.boxColor}
+                onChange={(e) =>
+                  st().updateCaptionStyle({
+                    boxColor: e.target.checked ? "#0c0e13" : "",
+                  })
+                }
+              />
+            </label>
+            {style.boxColor && (
+              <ColorField
+                label="Box color"
+                value={style.boxColor}
+                onChange={(v) => st().updateCaptionStyle({ boxColor: v })}
+              />
+            )}
           </div>
           <div className="flex items-center gap-4">
             <label className="flex items-center gap-2 text-[11px] font-medium text-slate-400">

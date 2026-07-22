@@ -141,14 +141,23 @@ export function buildAssDocument(opts: {
   const activeColor = assColor(style.activeColor);
   const activeBg = style.activeBgColor ? assColor(style.activeBgColor) : "";
   const accentColor = assColor(style.accentColor);
+  const textColor = assColor(style.textColor);
   const reveal = style.animation === "reveal";
+  const typewriter = style.animation === "typewriter";
 
-  // Decorate a non-active word: keyword coloring + optional emoji.
-  const decorate = (w: string): string => {
+  // Two-tone: base color alternates by word position (white/accent/...).
+  const twoToneColor = (idx: number) =>
+    idx % 2 === 0 ? textColor : accentColor;
+
+  // Decorate a non-active word: two-tone / keyword coloring + optional emoji.
+  const decorate = (w: string, idx: number): string => {
     const base = wordText(w);
     const withEmoji = style.autoEmoji && emojiFor(w) ? `${base} ${emojiFor(w)}` : base;
+    if (style.twoTone) {
+      return `{\\c${twoToneColor(idx)}}${withEmoji}{\\c${textColor}}`;
+    }
     if (style.highlightKeywords && isKeyword(w)) {
-      return `{\\c${accentColor}}${withEmoji}{\\c${assColor(style.textColor)}}`;
+      return `{\\c${accentColor}}${withEmoji}{\\c${textColor}}`;
     }
     return withEmoji;
   };
@@ -170,7 +179,7 @@ export function buildAssDocument(opts: {
       const evStart = map(Math.max(line.start, clipStart));
       const evEnd = map(Math.min(Math.max(line.end, holdUntil), clipEnd));
       if (evEnd <= evStart + 0.01) continue;
-      const text = line.words.map((w) => decorate(w.text)).join(" ");
+      const text = line.words.map((w, j) => decorate(w.text, j)).join(" ");
       events.push(
         `Dialogue: 1,${assTime(evStart)},${assTime(evEnd)},Caption,,0,0,0,,${fadeTag}${text}`,
       );
@@ -189,24 +198,68 @@ export function buildAssDocument(opts: {
       );
       if (evEnd <= 0.01 || evEnd <= evStart + 0.005) continue;
 
-      const rendered = line.words
-        .map((w, j) => {
-          // "reveal": only render words spoken so far.
-          if (reveal && j > i) return "";
-          if (j !== i) return decorate(w.text);
-          const highlight = activeBg
-            ? `{\\c${activeColor}\\3c${activeBg}\\bord${Math.max(outline, Math.round(fontSize * 0.16))}${popTag}}`
-            : `{\\c${activeColor}${popTag}}`;
-          const activeEmoji =
-            style.autoEmoji && emojiFor(w.text) ? ` ${emojiFor(w.text)}` : "";
-          return `${highlight}${wordText(w.text)}${activeEmoji}{\\r}`;
-        })
-        .filter((s) => s !== "")
-        .join(" ");
+      const highlight = activeBg
+        ? `{\\c${activeColor}\\3c${activeBg}\\bord${Math.max(outline, Math.round(fontSize * 0.16))}${popTag}}`
+        : `{\\c${activeColor}${popTag}}`;
+      const activeEmoji =
+        style.autoEmoji && emojiFor(word.text) ? ` ${emojiFor(word.text)}` : "";
 
-      events.push(
-        `Dialogue: 1,${assTime(evStart)},${assTime(evEnd)},Caption,,0,0,0,,${rendered}`,
-      );
+      // Builds the whole line with a caller-supplied rendering of the active
+      // word; preceding words are decorated, following words hidden
+      // (reveal / typewriter) or decorated (plain karaoke).
+      const composeLine = (activeRender: string): string =>
+        line.words
+          .map((w, j) => {
+            if ((reveal || typewriter) && j > i) return "";
+            if (j !== i) return decorate(w.text, j);
+            return activeRender;
+          })
+          .filter((s) => s !== "")
+          .join(" ");
+
+      const fullActive = `${highlight}${wordText(word.text)}${activeEmoji}{\\r}`;
+
+      if (!typewriter) {
+        events.push(
+          `Dialogue: 1,${assTime(evStart)},${assTime(evEnd)},Caption,,0,0,0,,${composeLine(fullActive)}`,
+        );
+        continue;
+      }
+
+      // Typewriter: reveal the active word letter-by-letter across its spoken
+      // window, then hold the full word until the next word begins. Hidden
+      // tail letters keep the block width/centering stable (\alpha&HFF&).
+      const chars = wordText(word.text);
+      const len = chars.length;
+      const wEndOut = map(Math.min(word.end, clipEnd));
+      const revealEnd = Math.min(evEnd, Math.max(wEndOut, evStart));
+      if (len <= 1 || revealEnd <= evStart + 0.02) {
+        events.push(
+          `Dialogue: 1,${assTime(evStart)},${assTime(evEnd)},Caption,,0,0,0,,${composeLine(fullActive)}`,
+        );
+        continue;
+      }
+      const span = revealEnd - evStart;
+      for (let k = 1; k <= len; k++) {
+        const t0 = evStart + (span * (k - 1)) / len;
+        const t1 = k === len ? revealEnd : evStart + (span * k) / len;
+        if (t1 <= t0 + 0.005) continue;
+        const typed = chars.slice(0, k);
+        const rest = chars.slice(k);
+        const active =
+          `${highlight}${typed}` +
+          (rest ? `{\\alpha&HFF&}${rest}` : "") +
+          `${activeEmoji}{\\r}`;
+        events.push(
+          `Dialogue: 1,${assTime(t0)},${assTime(t1)},Caption,,0,0,0,,${composeLine(active)}`,
+        );
+      }
+      // Hold the fully-typed word for the remainder of the window.
+      if (evEnd > revealEnd + 0.02) {
+        events.push(
+          `Dialogue: 1,${assTime(revealEnd)},${assTime(evEnd)},Caption,,0,0,0,,${composeLine(fullActive)}`,
+        );
+      }
     }
   }
 

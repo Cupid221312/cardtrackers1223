@@ -54,21 +54,42 @@ export default function CaptionOverlay({
           fontFamily: `"${style.fontFamily}", ${fontFallbacks}`,
           fontSize: fontPx,
           fontWeight: style.fontWeight,
+          backgroundColor: style.boxColor || undefined,
+          borderRadius: style.boxColor ? fontPx * 0.28 : undefined,
+          padding: style.boxColor
+            ? `${fontPx * 0.18}px ${fontPx * 0.42}px`
+            : undefined,
         }}
       >
         {line.words.map((word, i) => {
-          // "reveal" animation: only show words spoken so far (karaoke).
-          if (style.animation === "reveal" && style.karaoke && i > activeIdx) {
+          // "reveal"/"typewriter": only show words spoken so far (karaoke).
+          if (
+            (style.animation === "reveal" || style.animation === "typewriter") &&
+            style.karaoke &&
+            i > activeIdx
+          ) {
             return null;
           }
           const isActive = i === activeIdx;
           const keyword = style.highlightKeywords && isKeyword(word.text);
-          const color = isActive
-            ? style.activeColor
+          // Two-tone: alternate base color by word position (e.g. white/green).
+          const baseColor = style.twoTone
+            ? i % 2 === 0
+              ? style.textColor
+              : style.accentColor
             : keyword
               ? style.accentColor
               : style.textColor;
+          const color = isActive ? style.activeColor : baseColor;
           const emoji = style.autoEmoji ? emojiFor(word.text) : "";
+          // Typewriter: reveal the active word letter-by-letter over its
+          // spoken window; already-spoken words stay whole.
+          let typedCount = -1;
+          if (style.animation === "typewriter" && style.karaoke && isActive) {
+            const dur = Math.max(0.001, word.end - word.start);
+            const frac = Math.min(1, Math.max(0, (currentTime - word.start) / dur));
+            typedCount = Math.max(1, Math.ceil(frac * word.text.length));
+          }
           const shadowParts: string[] = [];
           if (strokePx > 0 && style.strokeColor) {
             // Multi-direction shadow fakes a heavy stroke more cleanly than
@@ -110,7 +131,23 @@ export default function CaptionOverlay({
                     : "scale(1)",
               }}
             >
-              {style.uppercase ? word.text.toUpperCase() : word.text}
+              {typedCount >= 0
+                ? (() => {
+                    const full = style.uppercase
+                      ? word.text.toUpperCase()
+                      : word.text;
+                    return (
+                      <>
+                        {full.slice(0, typedCount)}
+                        <span style={{ visibility: "hidden" }}>
+                          {full.slice(typedCount)}
+                        </span>
+                      </>
+                    );
+                  })()
+                : style.uppercase
+                  ? word.text.toUpperCase()
+                  : word.text}
               {emoji ? ` ${emoji}` : ""}
             </span>
           );
