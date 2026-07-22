@@ -51,10 +51,17 @@ export default function SourcePanel() {
     const s = store.getState();
     s.setIngesting(true);
     try {
-      const form = new FormData();
-      form.append("file", file);
+      // Stream the raw file (no multipart buffering) so large/long videos
+      // upload fast and don't exhaust server memory.
       const body = await readJsonOrThrow(
-        await fetch("/api/upload", { method: "POST", body: form }),
+        await fetch("/api/upload", {
+          method: "POST",
+          headers: {
+            "x-filename": file.name,
+            "content-type": file.type || "application/octet-stream",
+          },
+          body: file,
+        }),
       );
       const media: SourceMedia = {
         mediaId: body.mediaId,

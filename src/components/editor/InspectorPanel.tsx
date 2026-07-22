@@ -792,12 +792,14 @@ export default function InspectorPanel() {
                 const f = e.target.files?.[0];
                 e.target.value = "";
                 if (!f) return;
-                const form = new FormData();
-                form.append("file", f);
                 try {
                   const res = await fetch("/api/upload", {
                     method: "POST",
-                    body: form,
+                    headers: {
+                      "x-filename": f.name,
+                      "content-type": f.type || "application/octet-stream",
+                    },
+                    body: f,
                   });
                   const body = await res.json();
                   st().updateAudio({

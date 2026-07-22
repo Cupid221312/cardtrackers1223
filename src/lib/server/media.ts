@@ -1,7 +1,9 @@
-import { promises as fs } from "fs";
+import { promises as fs, createWriteStream } from "fs";
 import path from "path";
 import { spawn } from "child_process";
 import crypto from "crypto";
+import { Readable } from "stream";
+import { pipeline } from "stream/promises";
 import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import ffprobeInstaller from "@ffprobe-installer/ffprobe";
 
@@ -45,6 +47,26 @@ export async function saveMediaBuffer(
   const filePath = path.join(UPLOAD_DIR, `${id}.${safeExt}`);
   await fs.writeFile(filePath, data);
   return filePath;
+}
+
+/**
+ * Stream an upload straight to disk without buffering it in memory — the only
+ * way large files (multi-GB, long videos) upload quickly and don't exhaust
+ * RAM. Returns the path and the bytes written.
+ */
+export async function saveMediaStream(
+  id: string,
+  ext: string,
+  body: ReadableStream<Uint8Array>,
+): Promise<{ filePath: string; bytes: number }> {
+  await ensureMediaDirs();
+  const safeExt = ext.replace(/[^a-z0-9]/gi, "").slice(0, 5) || "bin";
+  const filePath = path.join(UPLOAD_DIR, `${id}.${safeExt}`);
+  // Readable.fromWeb bridges the web ReadableStream (req.body) to a Node
+  // stream; pipeline writes chunk-by-chunk and handles backpressure.
+  await pipeline(Readable.fromWeb(body as Parameters<typeof Readable.fromWeb>[0]), createWriteStream(filePath));
+  const { size } = await fs.stat(filePath);
+  return { filePath, bytes: size };
 }
 
 /** Resolve a media id to its on-disk path, or null. */
