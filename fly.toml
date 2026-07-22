@@ -1,0 +1,27 @@
+# Fly.io deploy config. From the repo root: `fly launch --copy-config --now`
+# (installs from the Dockerfile). A volume is mounted for persistent
+# uploads/exports; exports are CPU/RAM heavy so give the machine ≥2GB.
+app = "clipforge-studio"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "3000"
+  NODE_ENV = "production"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[mounts]]
+  source = "clipforge_data"
+  destination = "/app/.data"
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "2gb"
