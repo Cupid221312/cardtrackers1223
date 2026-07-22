@@ -9,6 +9,39 @@ processes**. It will **not** run on Vercel/Netlify serverless.
 > 512 MB free tiers are fine for browsing/editing but exports may be slow or
 > run out of memory.
 
+## Deploy 100% FREE on Hugging Face Spaces (recommended) → public URL
+
+This is the only free option with enough RAM (16 GB) to actually export
+video, and it needs **no credit card**.
+
+1. Make a free account at **https://huggingface.co/join**.
+2. Go to **https://huggingface.co/new-space**:
+   - **Space name:** e.g. `clipforge-studio`
+   - **SDK:** choose **Docker** → **Blank**
+   - **Hardware:** **CPU basic · 2 vCPU · 16 GB** (free)
+   - Visibility: Public
+   - Click **Create Space**.
+3. Push this code into the Space (it's just a git repo). From a clone of
+   `Cupid221312/AiClipping`:
+   ```bash
+   git remote add space https://huggingface.co/spaces/<your-username>/clipforge-studio
+   git push space main
+   # username = your HF name; password = an HF access token you create at
+   # https://huggingface.co/settings/tokens  (role: write)
+   ```
+   The repo's `README.md` already carries the Space metadata (`sdk: docker`,
+   `app_port: 7860`), so the Space builds automatically.
+4. Watch the **Building** logs (~5–8 min). When it flips to **Running** you get
+   a public URL: **`https://<your-username>-clipforge-studio.hf.space`**.
+5. (Optional) real transcription: Space **Settings → Variables and secrets →
+   New secret** `OPENAI_API_KEY`. *(The OpenAI API is not free — it needs
+   prepaid credit, ~$5 min — so skip this to stay free; the app works with a
+   built-in demo transcript.)*
+
+> Free Spaces sleep after ~48 h idle and their disk resets on rebuild (uploads/
+> exports don't persist long-term) — perfect for trying it and making clips,
+> not for permanent storage. It wakes on the next visit.
+
 ## Run it locally
 
 ```bash

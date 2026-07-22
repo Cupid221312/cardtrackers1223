@@ -8,11 +8,11 @@ primary_region = "iad"
   dockerfile = "Dockerfile"
 
 [env]
-  PORT = "3000"
+  PORT = "7860"
   NODE_ENV = "production"
 
 [http_service]
-  internal_port = 3000
+  internal_port = 7860
   force_https = true
   auto_stop_machines = "stop"
   auto_start_machines = true

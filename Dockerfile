@@ -17,7 +17,9 @@ FROM node:20-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV PORT=3000
+# 7860 is Hugging Face Spaces' default app port, so the image runs there with
+# zero config. Render/Fly inject or map their own port and still work.
+ENV PORT=7860
 
 # System ffmpeg/ffprobe (used via FFMPEG_PATH/FFPROBE_PATH), yt-dlp for
 # YouTube/Twitch/Kick link ingest, fontconfig + a color-emoji font so libass
@@ -43,9 +45,11 @@ RUN mkdir -p /usr/share/fonts/truetype/clipforge \
 ENV FONTS_DIR=/app/public/fonts
 
 # Persist uploads, exports, projects, and derived caches across restarts by
-# mounting a volume at /app/.data.
-RUN mkdir -p /app/.data
+# mounting a volume at /app/.data. chmod 777 so hosts that run the container
+# as a non-root user (e.g. Hugging Face Spaces, UID 1000) can still write;
+# override the location entirely with DATA_DIR if the host provides one.
+RUN mkdir -p /app/.data && chmod -R 777 /app/.data
 VOLUME ["/app/.data"]
 
-EXPOSE 3000
+EXPOSE 7860
 CMD ["node", "server.js"]

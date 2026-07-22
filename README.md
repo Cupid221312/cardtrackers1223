@@ -1,3 +1,16 @@
+<!-- The block below is Hugging Face Space metadata. It lets you deploy this
+     repo to a FREE Hugging Face Docker Space (16 GB RAM — enough to export)
+     with no credit card. See DEPLOY.md. It is ignored when running elsewhere. -->
+---
+title: ClipForge Studio
+emoji: 🎬
+colorFrom: purple
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # ClipForge Studio
 
 An AI-powered video clipping and editing studio for turning long-form video

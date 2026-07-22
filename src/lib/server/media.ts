@@ -11,7 +11,9 @@ import ffprobeInstaller from "@ffprobe-installer/ffprobe";
  * preserved so ffmpeg/ffprobe can sniff container formats.
  */
 
-const DATA_ROOT = path.join(process.cwd(), ".data");
+// DATA_DIR lets hosts that run as a non-root user (e.g. Hugging Face Spaces)
+// point storage at a writable path like /data or /tmp.
+const DATA_ROOT = process.env.DATA_DIR || path.join(process.cwd(), ".data");
 export const UPLOAD_DIR = path.join(DATA_ROOT, "uploads");
 export const EXPORT_DIR = path.join(DATA_ROOT, "exports");
 /** Derived artifacts (waveform peaks, filmstrip thumbnails). Kept separate

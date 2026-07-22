@@ -14,7 +14,7 @@ import type { AutomationRule, PlatformConnection } from "@/lib/types";
  * (no token), while tokens stay in connections.secret.json.
  */
 
-const DATA_ROOT = path.join(process.cwd(), ".data");
+const DATA_ROOT = process.env.DATA_DIR || path.join(process.cwd(), ".data");
 const RULES_PATH = path.join(DATA_ROOT, "automations.json");
 const CONN_META_PATH = path.join(DATA_ROOT, "connections.json");
 const CONN_SECRET_PATH = path.join(DATA_ROOT, "connections.secret.json");

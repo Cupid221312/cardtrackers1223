@@ -4,7 +4,10 @@ import type { SavedProject, SavedProjectSummary } from "@/lib/types";
 import { isValidMediaId } from "@/lib/server/media";
 
 /** Project session files live next to the media store, one per media id. */
-const PROJECT_DIR = path.join(process.cwd(), ".data", "projects");
+const PROJECT_DIR = path.join(
+  process.env.DATA_DIR || path.join(process.cwd(), ".data"),
+  "projects",
+);
 
 async function ensureProjectDir(): Promise<void> {
   await fs.mkdir(PROJECT_DIR, { recursive: true });
