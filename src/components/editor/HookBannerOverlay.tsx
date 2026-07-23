@@ -1,6 +1,6 @@
 "use client";
 
-import { useEditorStore } from "@/lib/store/editorStore";
+import { useEditorStore, useSelectedClip } from "@/lib/store/editorStore";
 
 /** High-contrast top title banner ("hook") rendered over the 9:16 canvas. */
 export default function HookBannerOverlay({
@@ -9,7 +9,11 @@ export default function HookBannerOverlay({
   canvasHeight: number;
 }) {
   const banner = useEditorStore((s) => s.hookBanner);
-  if (!banner.enabled || !banner.text.trim()) return null;
+  const clip = useSelectedClip();
+  // Fall back to the selected clip's auto-generated hook title so the banner
+  // is visible out of the box (users can edit or disable it in the inspector).
+  const text = banner.text.trim() || clip?.title?.trim() || "";
+  if (!banner.enabled || !text) return null;
 
   const fontPx = Math.max(11, canvasHeight * 0.032);
 
@@ -28,7 +32,7 @@ export default function HookBannerOverlay({
           boxShadow: "0 4px 18px rgba(0,0,0,0.45)",
         }}
       >
-        {banner.text}
+        {text}
       </div>
     </div>
   );

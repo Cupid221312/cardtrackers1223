@@ -2,6 +2,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import os from "os";
 import crypto from "crypto";
+import { spawn } from "child_process";
 import type { Transcript, TranscriptSegment, Word } from "@/lib/types";
 import { probeMedia, runFfmpeg, runFfmpegCapture } from "@/lib/server/media";
 
@@ -101,6 +102,84 @@ export async function transcribeWithWhisper(
 }
 
 // ---------------------------------------------------------------------------
+// Free local transcription via the official OpenAI Whisper CLI (pip install
+// -U openai-whisper). Most reliable free path — no node native deps.
+// ---------------------------------------------------------------------------
+
+/**
+ * Real speech-to-text using the `whisper` command-line tool if it's on PATH.
+ * Requires `pip install -U openai-whisper` and a system `ffmpeg`. The model
+ * (tiny.en by default) downloads once on first run. Throws "whisper CLI not
+ * installed" when unavailable so the caller can fall back.
+ */
+export async function transcribeWithWhisperCli(
+  mediaPath: string,
+): Promise<Transcript> {
+  const model = process.env.WHISPER_MODEL || "tiny.en";
+  const outDir = path.join(os.tmpdir(), `clip-whisper-${crypto.randomUUID()}`);
+  await fs.mkdir(outDir, { recursive: true });
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const proc = spawn("whisper", [
+        mediaPath,
+        "--model", model,
+        "--language", "en",
+        "--word_timestamps", "True",
+        "--output_format", "json",
+        "--output_dir", outDir,
+        "--fp16", "False",
+        "--verbose", "False",
+      ]);
+      let errTail = "";
+      proc.stderr.on("data", (d: Buffer) => (errTail = (errTail + d).slice(-2000)));
+      proc.on("error", (e: NodeJS.ErrnoException) =>
+        reject(e.code === "ENOENT" ? new Error("whisper CLI not installed") : e),
+      );
+      proc.on("close", (code) =>
+        code === 0
+          ? resolve()
+          : reject(new Error(`whisper exited ${code}: ${errTail.slice(-300)}`)),
+      );
+    });
+
+    const files = await fs.readdir(outDir);
+    const jsonFile = files.find((f) => f.endsWith(".json"));
+    if (!jsonFile) throw new Error("whisper produced no json output");
+    const data = JSON.parse(
+      await fs.readFile(path.join(outDir, jsonFile), "utf8"),
+    ) as {
+      language?: string;
+      segments?: Array<{
+        words?: Array<{ word: string; start: number; end: number }>;
+      }>;
+    };
+
+    const words: Word[] = [];
+    for (const seg of data.segments ?? []) {
+      for (const w of seg.words ?? []) {
+        const text = String(w.word ?? "").trim();
+        if (!text) continue;
+        words.push({
+          id: `w-${words.length}`,
+          text,
+          start: w.start,
+          end: Math.max(w.end, w.start + 0.05),
+        });
+      }
+    }
+    if (words.length === 0) throw new Error("whisper returned no words");
+    return {
+      words,
+      segments: segmentWords(words),
+      language: data.language ?? "en",
+      source: "whisper",
+    };
+  } finally {
+    await fs.rm(outDir, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Free local transcription (Whisper via transformers.js — no API, no credits)
 // ---------------------------------------------------------------------------
 
@@ -118,10 +197,14 @@ let localAsrModel = "";
 export async function transcribeLocal(mediaPath: string): Promise<Transcript> {
   const modelId = process.env.WHISPER_MODEL || "Xenova/whisper-tiny.en";
 
-  // Dynamic import so a missing optional dep never breaks build/startup.
-  const tf = (await import("@huggingface/transformers").catch(() => {
-    throw new Error("local transcription engine not installed");
-  })) as {
+  // Indirect specifier so TypeScript/webpack don't resolve this optional
+  // dependency at build time; it's only required at runtime if present.
+  const mod = "@huggingface/transformers";
+  const tf = (await (import(/* webpackIgnore: true */ mod) as Promise<unknown>).catch(
+    () => {
+      throw new Error("local transcription engine not installed");
+    },
+  )) as {
     pipeline: (task: string, model: string) => Promise<unknown>;
     env: { cacheDir?: string; allowRemoteModels?: boolean };
   };

@@ -199,10 +199,11 @@ export const useEditorStore = create<EditorState>()(
   captionStyle: CAPTION_TEMPLATES.reels,
   captionsEnabled: true,
   hookBanner: {
-    // Off by default to match the Reels Clean look; one click re-enables.
-    enabled: false,
-    text: "YOUR HOOK GOES HERE",
-    bgColor: "#ffd400",
+    // On by default; with empty text the overlay shows the selected clip's
+    // auto hook title, so a banner is visible out of the box.
+    enabled: true,
+    text: "",
+    bgColor: "#ffffff",
     textColor: "#000000",
     verticalPosition: 0.09,
   },

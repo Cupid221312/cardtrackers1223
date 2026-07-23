@@ -14,11 +14,12 @@ export const runtime = "nodejs";
 export const maxDuration = 120;
 
 const TILE_HEIGHT = 54;
-// One frame roughly every ~4s so the strip reads as real footage across long
-// videos instead of ~20 frames smeared over the whole timeline. Bounded so
-// short clips still get enough frames and huge VODs don't explode the sprite.
+// Enough frames that, stretched across the timeline at the default zoom
+// (~12 px/s), each tile lands at roughly its native 16:9 width (~96px at
+// 54px tall) instead of a horizontal smear. Bounded for short clips / huge
+// VODs. duration/8 ≈ one frame per ~8s ≈ native aspect at default zoom.
 function tileCountFor(duration: number): number {
-  return Math.max(12, Math.min(240, Math.round(duration / 4)));
+  return Math.max(16, Math.min(300, Math.round(duration / 8)));
 }
 
 /**
