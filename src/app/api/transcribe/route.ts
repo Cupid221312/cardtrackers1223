@@ -4,6 +4,7 @@ import { findMediaPath } from "@/lib/server/media";
 import {
   buildDemoTranscript,
   transcribeLocal,
+  transcribeWithGroq,
   transcribeWithWhisper,
   transcribeWithWhisperCli,
 } from "@/services/ai/transcription";
@@ -42,6 +43,11 @@ export async function POST(req: NextRequest) {
       const transcript = await transcribeWithWhisper(mediaPath);
       return NextResponse.json({ transcript });
     }
+    // 1b) Free cloud Whisper via Groq (free key, no card, no local install).
+    if (process.env.GROQ_API_KEY) {
+      const transcript = await transcribeWithGroq(mediaPath);
+      return NextResponse.json({ transcript });
+    }
     // 2) Free local speech-to-text. Prefer the official Whisper CLI
     //    (pip install -U openai-whisper), then the transformers.js engine.
     if (process.env.DISABLE_LOCAL_STT !== "1") {
@@ -67,7 +73,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         transcript,
         warning:
-          "No real transcription engine found. Install it with `pip install -U openai-whisper` (plus ffmpeg on PATH), then re-transcribe. Showing a placeholder transcript for now.",
+          "No transcription engine configured. Easiest fix: get a free Groq API key (console.groq.com, no card) and put GROQ_API_KEY=... in a .env file, then restart. Showing a placeholder transcript for now.",
       });
     }
     const transcript = await buildDemoTranscript(mediaPath);

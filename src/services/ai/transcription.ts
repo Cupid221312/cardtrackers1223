@@ -48,38 +48,44 @@ function segmentWords(words: Word[]): TranscriptSegment[] {
   return segments;
 }
 
-export async function transcribeWithWhisper(
+interface WhisperSegment {
+  start: number;
+  end: number;
+  text: string;
+}
+
+/**
+ * Transcribe via any OpenAI-compatible audio API (OpenAI or Groq). Returns
+ * word-level timings when the provider gives them, otherwise synthesizes them
+ * by distributing each segment's words evenly across the segment window (good
+ * enough for karaoke captions).
+ */
+async function transcribeViaApi(
   mediaPath: string,
+  opts: { apiKey?: string; baseURL?: string; model: string },
 ): Promise<Transcript> {
   const { default: OpenAI } = await import("openai");
-  const client = new OpenAI();
+  const client = new OpenAI({ apiKey: opts.apiKey, baseURL: opts.baseURL });
 
-  // Whisper caps request size at 25 MB — a 64kbps mono mp3 keeps ~50 min
-  // of speech under the limit and transcribes identically.
-  const audioPath = path.join(
-    os.tmpdir(),
-    `clipforge-${crypto.randomUUID()}.mp3`,
-  );
+  // 25 MB request cap — a 64kbps mono mp3 keeps ~50 min under the limit.
+  const audioPath = path.join(os.tmpdir(), `clipforge-${crypto.randomUUID()}.mp3`);
   try {
     await runFfmpeg([
-      "-i", mediaPath,
-      "-vn",
-      "-ac", "1",
-      "-ar", "16000",
-      "-b:a", "64k",
-      audioPath,
+      "-i", mediaPath, "-vn", "-ac", "1", "-ar", "16000", "-b:a", "64k", audioPath,
     ]);
 
-    const file = await OpenAI.toFile(
-      await fs.readFile(audioPath),
-      "audio.mp3",
-    );
+    const file = await OpenAI.toFile(await fs.readFile(audioPath), "audio.mp3");
     const result = (await client.audio.transcriptions.create({
-      model: "whisper-1",
+      model: opts.model,
       file,
       response_format: "verbose_json",
-      timestamp_granularities: ["word"],
-    })) as unknown as { language?: string; words?: WhisperWord[]; text?: string };
+      timestamp_granularities: ["word", "segment"],
+    })) as unknown as {
+      language?: string;
+      words?: WhisperWord[];
+      segments?: WhisperSegment[];
+      text?: string;
+    };
 
     const words: Word[] = (result.words ?? []).map((w, i) => ({
       id: `w-${i}`,
@@ -87,9 +93,22 @@ export async function transcribeWithWhisper(
       start: w.start,
       end: w.end,
     }));
-    if (words.length === 0) {
-      throw new Error("Whisper returned no word timestamps");
+
+    // No word timings? Synthesize them from segment windows.
+    if (words.length === 0 && result.segments?.length) {
+      for (const seg of result.segments) {
+        const toks = seg.text.trim().split(/\s+/).filter(Boolean);
+        if (toks.length === 0) continue;
+        const dur = Math.max(0.2, seg.end - seg.start);
+        const per = dur / toks.length;
+        toks.forEach((tok, j) => {
+          const start = seg.start + j * per;
+          words.push({ id: `w-${words.length}`, text: tok, start, end: start + per });
+        });
+      }
     }
+    if (words.length === 0) throw new Error("transcription returned no words");
+
     return {
       words,
       segments: segmentWords(words),
@@ -99,6 +118,20 @@ export async function transcribeWithWhisper(
   } finally {
     await fs.unlink(audioPath).catch(() => undefined);
   }
+}
+
+/** Paid OpenAI Whisper (needs OPENAI_API_KEY). */
+export async function transcribeWithWhisper(mediaPath: string): Promise<Transcript> {
+  return transcribeViaApi(mediaPath, { model: "whisper-1" });
+}
+
+/** Free, fast cloud Whisper via Groq (needs a free GROQ_API_KEY, no card). */
+export async function transcribeWithGroq(mediaPath: string): Promise<Transcript> {
+  return transcribeViaApi(mediaPath, {
+    apiKey: process.env.GROQ_API_KEY,
+    baseURL: "https://api.groq.com/openai/v1",
+    model: process.env.GROQ_WHISPER_MODEL || "whisper-large-v3-turbo",
+  });
 }
 
 // ---------------------------------------------------------------------------
