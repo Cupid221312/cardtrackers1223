@@ -17,8 +17,11 @@ export default function CaptionOverlay({
 }) {
   const lines = useEditorStore((s) => s.captionLines);
   const style = useEditorStore((s) => s.captionStyle);
+  const captionsEnabled = useEditorStore((s) => s.captionsEnabled);
   const currentTime = useEditorStore((s) => s.currentTime);
   const clip = useSelectedClip();
+
+  if (!captionsEnabled) return null;
 
   // Phrase mode holds finished lines on screen so text never flickers off
   // between sentences (Reels style); karaoke mode tracks speech exactly.

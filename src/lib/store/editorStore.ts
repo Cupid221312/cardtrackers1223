@@ -51,6 +51,8 @@ interface EditorState {
 
   // ---- styling & effects ---------------------------------------------------
   captionStyle: CaptionStyle;
+  /** Master on/off for captions (preview + export). */
+  captionsEnabled: boolean;
   hookBanner: HookBanner;
   hookBannerEdited: boolean;
   framing: Framing;
@@ -111,6 +113,7 @@ interface EditorState {
 
   applyTemplate: (id: CaptionTemplateId) => void;
   updateCaptionStyle: (patch: Partial<CaptionStyle>) => void;
+  setCaptionsEnabled: (v: boolean) => void;
   updateHookBanner: (patch: Partial<HookBanner>) => void;
   updateFraming: (patch: Partial<Framing>) => void;
   setAspectRatio: (a: AspectRatio) => void;
@@ -191,6 +194,7 @@ export const useEditorStore = create<EditorState>()(
   seekTime: 0,
 
   captionStyle: CAPTION_TEMPLATES.reels,
+  captionsEnabled: true,
   hookBanner: {
     // Off by default to match the Reels Clean look; one click re-enables.
     enabled: false,
@@ -504,6 +508,8 @@ export const useEditorStore = create<EditorState>()(
       };
     }),
 
+  setCaptionsEnabled: (captionsEnabled) => set({ captionsEnabled }),
+
   updateHookBanner: (patch) =>
     set((s) => ({
       hookBanner: { ...s.hookBanner, ...patch },
@@ -588,6 +594,7 @@ export const useEditorStore = create<EditorState>()(
       skipHydration: true,
       partialize: (s) => ({
         captionStyle: s.captionStyle,
+        captionsEnabled: s.captionsEnabled,
         clipFinderSettings: s.clipFinderSettings,
         framing: s.framing,
         aspectRatio: s.aspectRatio,

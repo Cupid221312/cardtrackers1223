@@ -13,12 +13,17 @@ import {
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-const TILE_COUNT = 20;
 const TILE_HEIGHT = 54;
+// One frame roughly every ~4s so the strip reads as real footage across long
+// videos instead of ~20 frames smeared over the whole timeline. Bounded so
+// short clips still get enough frames and huge VODs don't explode the sprite.
+function tileCountFor(duration: number): number {
+  return Math.max(12, Math.min(240, Math.round(duration / 4)));
+}
 
 /**
- * Filmstrip sprite for the timeline's video track: TILE_COUNT frames
- * sampled evenly across the source, tiled into one cached JPEG strip.
+ * Filmstrip sprite for the timeline's video track: frames sampled evenly
+ * across the source (count scales with duration) tiled into one cached JPEG.
  */
 export async function GET(
   _req: Request,
@@ -33,7 +38,16 @@ export async function GET(
   }
 
   await ensureMediaDirs();
-  const cachePath = path.join(CACHE_DIR, `${params.id}.thumbs.jpg`);
+
+  let tiles = 60;
+  try {
+    const { duration } = await probeMedia(mediaPath);
+    if (duration && duration > 0) tiles = tileCountFor(duration);
+  } catch {
+    /* fall back to default tile count */
+  }
+  // Tile count is baked into the cache name so changing it re-renders.
+  const cachePath = path.join(CACHE_DIR, `${params.id}.thumbs${tiles}.jpg`);
 
   try {
     await fs.access(cachePath);
@@ -46,7 +60,7 @@ export async function GET(
         "-v", "error",
         "-i", mediaPath,
         "-vf",
-        `fps=${(TILE_COUNT / duration).toFixed(6)},scale=-2:${TILE_HEIGHT},tile=${TILE_COUNT}x1`,
+        `fps=${(tiles / duration).toFixed(6)},scale=-2:${TILE_HEIGHT},tile=${tiles}x1`,
         "-frames:v", "1",
         "-q:v", "5",
         cachePath,

@@ -14,6 +14,51 @@ import type {
 } from "@/lib/types";
 import clsx from "clsx";
 
+/**
+ * Editable numeric field that actually lets you clear and retype the value
+ * (a plain controlled number input snaps back the moment it's empty). Keeps
+ * a local string while typing and clamps to [min,max] on blur.
+ */
+function NumField({
+  label,
+  value,
+  min,
+  max,
+  onCommit,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  onCommit: (n: number) => void;
+}) {
+  const [text, setText] = useState(String(value));
+  useEffect(() => {
+    setText(String(value));
+  }, [value]);
+  return (
+    <label className="text-[11px] text-slate-400">
+      {label}
+      <input
+        type="text"
+        inputMode="numeric"
+        className="text-input mt-1 !px-2 !py-1"
+        value={text}
+        onChange={(e) => {
+          const t = e.target.value.replace(/[^0-9]/g, "");
+          setText(t);
+          if (t !== "") onCommit(Math.min(max, Number(t))); // no lower-clamp while typing
+        }}
+        onBlur={() => {
+          const n = text === "" ? min : Math.max(min, Math.min(max, Number(text)));
+          setText(String(n));
+          onCommit(n);
+        }}
+      />
+    </label>
+  );
+}
+
 async function readJsonOrThrow(res: Response) {
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -369,51 +414,33 @@ export default function SourcePanel() {
         </div>
 
         <div className="mb-2.5 grid grid-cols-3 gap-1.5">
-          <label className="text-[11px] text-slate-400">
-            Min s
-            <input
-              type="number"
-              className="text-input mt-1 !px-2 !py-1"
-              value={settings.minDuration}
-              min={10}
-              max={settings.maxDuration}
-              onChange={(e) =>
-                store.getState().setClipFinderSettings({
-                  minDuration: Number(e.target.value) || 30,
-                })
-              }
-            />
-          </label>
-          <label className="text-[11px] text-slate-400">
-            Max s
-            <input
-              type="number"
-              className="text-input mt-1 !px-2 !py-1"
-              value={settings.maxDuration}
-              min={settings.minDuration}
-              max={180}
-              onChange={(e) =>
-                store.getState().setClipFinderSettings({
-                  maxDuration: Number(e.target.value) || 60,
-                })
-              }
-            />
-          </label>
-          <label className="text-[11px] text-slate-400">
-            Clips
-            <input
-              type="number"
-              className="text-input mt-1 !px-2 !py-1"
-              value={settings.maxClips}
-              min={1}
-              max={12}
-              onChange={(e) =>
-                store.getState().setClipFinderSettings({
-                  maxClips: Number(e.target.value) || 6,
-                })
-              }
-            />
-          </label>
+          <NumField
+            label="Min (s)"
+            value={settings.minDuration}
+            min={1}
+            max={600}
+            onCommit={(n) =>
+              store.getState().setClipFinderSettings({ minDuration: n })
+            }
+          />
+          <NumField
+            label="Max (s)"
+            value={settings.maxDuration}
+            min={2}
+            max={600}
+            onCommit={(n) =>
+              store.getState().setClipFinderSettings({ maxDuration: n })
+            }
+          />
+          <NumField
+            label="Clips"
+            value={settings.maxClips}
+            min={1}
+            max={20}
+            onCommit={(n) =>
+              store.getState().setClipFinderSettings({ maxClips: n })
+            }
+          />
         </div>
 
         <button

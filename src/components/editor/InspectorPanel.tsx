@@ -76,6 +76,7 @@ function ColorField({
 
 export default function InspectorPanel() {
   const style = useEditorStore((s) => s.captionStyle);
+  const captionsEnabled = useEditorStore((s) => s.captionsEnabled);
   const banner = useEditorStore((s) => s.hookBanner);
   const framing = useEditorStore((s) => s.framing);
   const aspectRatio = useEditorStore((s) => s.aspectRatio);
@@ -151,8 +152,27 @@ export default function InspectorPanel() {
     <div className="flex flex-col gap-3">
       {/* ---- caption style ------------------------------------------------ */}
       <section className="panel p-3">
-        <h2 className="panel-title mb-2.5">Caption Style</h2>
-        <div className="mb-3 grid grid-cols-2 gap-1.5">
+        <div className="mb-2.5 flex items-center justify-between">
+          <h2 className="panel-title">Caption Style</h2>
+          <button
+            onClick={() => st().setCaptionsEnabled(!captionsEnabled)}
+            className={clsx(
+              "rounded-full px-2.5 py-1 text-[10px] font-bold transition",
+              captionsEnabled
+                ? "bg-accent/20 text-accent-glow hover:bg-accent/30"
+                : "bg-ink-700 text-slate-400 hover:bg-ink-600",
+            )}
+            title="Turn all captions on/off (preview + export)"
+          >
+            {captionsEnabled ? "CAPTIONS ON" : "CAPTIONS OFF"}
+          </button>
+        </div>
+        <div
+          className={clsx(
+            "mb-3 grid grid-cols-2 gap-1.5",
+            !captionsEnabled && "pointer-events-none opacity-40",
+          )}
+        >
           {(Object.keys(CAPTION_TEMPLATES) as CaptionTemplateId[]).map((id) => (
             <button
               key={id}

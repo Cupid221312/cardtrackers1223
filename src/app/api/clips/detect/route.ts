@@ -7,8 +7,8 @@ export const runtime = "nodejs";
 export const maxDuration = 120;
 
 const SettingsSchema = z.object({
-  minDuration: z.number().min(5).max(300),
-  maxDuration: z.number().min(10).max(600),
+  minDuration: z.number().min(1).max(600),
+  maxDuration: z.number().min(2).max(600),
   maxClips: z.number().int().min(1).max(20),
 });
 

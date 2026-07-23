@@ -72,7 +72,9 @@ export default function ExportQueueModal() {
       preset,
       clip: { title: target.title, start: target.start, end: target.end },
       captions: {
-        lines: linesInRange(s.captionLines, target.start, target.end),
+        lines: s.captionsEnabled
+          ? linesInRange(s.captionLines, target.start, target.end)
+          : [],
         style: s.captionStyle,
       },
       // In batch mode each clip gets its own hook title unless the user
