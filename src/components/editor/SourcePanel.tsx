@@ -81,6 +81,7 @@ export default function SourcePanel() {
 
   const [linkUrl, setLinkUrl] = useState("");
   const [recent, setRecent] = useState<SavedProjectSummary[]>([]);
+  const [sttMsg, setSttMsg] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -178,7 +179,9 @@ export default function SourcePanel() {
       s.setSource(media);
       clearEditHistory();
       s.setIngesting(false);
-      void transcribe(media);
+      // Demo footage has no real speech — keep its labeled placeholder
+      // transcript instead of running browser STT on a test tone.
+      void transcribe(media, false);
     } catch (err) {
       s.setIngesting(false, err instanceof Error ? err.message : "Demo failed");
     }
@@ -209,9 +212,10 @@ export default function SourcePanel() {
 
   // ---- transcription + clip detection -------------------------------------
 
-  async function transcribe(media: SourceMedia) {
+  async function transcribe(media: SourceMedia, allowBrowserStt = true) {
     const s = store.getState();
     s.setTranscribing(true);
+    setSttMsg("");
     try {
       const body = await readJsonOrThrow(
         await fetch("/api/transcribe", {
@@ -220,11 +224,34 @@ export default function SourcePanel() {
           body: JSON.stringify({ mediaId: media.mediaId }),
         }),
       );
-      s.setTranscript(body.transcript as Transcript);
+      const serverTranscript = body.transcript as Transcript;
+
+      // If the server could only give a placeholder (no key / no local
+      // engine), transcribe for real IN THE BROWSER — free, no account.
+      if (allowBrowserStt && serverTranscript.source !== "whisper") {
+        try {
+          const { transcribeInBrowser } = await import(
+            "@/services/ai/browserTranscribe"
+          );
+          const real = await transcribeInBrowser(media.mediaId, setSttMsg);
+          s.setTranscript(real);
+          s.setTranscribing(false);
+          setSttMsg("");
+          void detectClips(real);
+          return;
+        } catch (bErr) {
+          console.error("[browser STT]", bErr);
+          setSttMsg("");
+          // fall back to the placeholder transcript below
+        }
+      }
+
+      s.setTranscript(serverTranscript);
       s.setTranscribing(false);
-      void detectClips(body.transcript as Transcript);
+      void detectClips(serverTranscript);
     } catch (err) {
       s.setTranscribing(false);
+      setSttMsg("");
       s.setIngesting(
         false,
         err instanceof Error ? err.message : "Transcription failed",
@@ -348,6 +375,11 @@ export default function SourcePanel() {
         {ingestError && (
           <p className="mt-2 rounded-lg border border-brand-red/30 bg-brand-red/10 px-2.5 py-1.5 text-xs text-brand-red">
             {ingestError}
+          </p>
+        )}
+        {sttMsg && (
+          <p className="mt-2 rounded-lg border border-accent/30 bg-accent/10 px-2.5 py-1.5 text-xs text-accent-glow">
+            {sttMsg}
           </p>
         )}
         {source && (

@@ -55,10 +55,11 @@ export default function TranscriptPanel() {
       </div>
       {transcript.source !== "whisper" && (
         <p className="mb-2 rounded-md border border-brand-yellow/30 bg-brand-yellow/10 p-2 text-[11px] leading-relaxed text-brand-yellow">
-          This is a <b>placeholder</b> transcript, not your video&apos;s speech.
-          To get the real transcript free: create a free key at{" "}
-          <b>console.groq.com</b> (no card), add <b>GROQ_API_KEY=...</b> to a{" "}
-          <b>.env</b> file in the project folder, restart, and re-import.
+          This is a <b>placeholder</b> transcript. Real transcription runs
+          automatically <b>in your browser</b> when you upload a video (no
+          account, no install) — if you still see this, your browser blocked the
+          model download; try re-importing on Chrome/Edge. Optional: set a free{" "}
+          <b>GROQ_API_KEY</b> in a <b>.env</b> file for fast cloud transcription.
         </p>
       )}
       <div className="max-h-64 overflow-y-auto pr-1 text-[13px] leading-[1.9]">
