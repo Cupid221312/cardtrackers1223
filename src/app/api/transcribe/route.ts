@@ -3,6 +3,7 @@ import { z } from "zod";
 import { findMediaPath } from "@/lib/server/media";
 import {
   buildDemoTranscript,
+  transcribeLocal,
   transcribeWithWhisper,
 } from "@/services/ai/transcription";
 
@@ -25,9 +26,26 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // 1) Paid OpenAI Whisper if a key is configured (fast, most accurate).
     if (process.env.OPENAI_API_KEY) {
       const transcript = await transcribeWithWhisper(mediaPath);
       return NextResponse.json({ transcript });
+    }
+    // 2) Free local Whisper (real speech-to-text, runs on this machine).
+    if (process.env.DISABLE_LOCAL_STT !== "1") {
+      try {
+        const transcript = await transcribeLocal(mediaPath);
+        return NextResponse.json({ transcript });
+      } catch (localErr) {
+        console.error("[transcribe] local STT unavailable:", localErr);
+        // fall through to the demo transcript below
+        const transcript = await buildDemoTranscript(mediaPath);
+        return NextResponse.json({
+          transcript,
+          warning:
+            "Free local transcription isn't available yet (install @huggingface/transformers or set OPENAI_API_KEY). Showing a placeholder transcript.",
+        });
+      }
     }
     const transcript = await buildDemoTranscript(mediaPath);
     return NextResponse.json({ transcript });

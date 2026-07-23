@@ -72,6 +72,8 @@ interface EditorState {
   /** Click-to-track picking mode: canvas shows the full frame and waits
    *  for the user to drop a dot on the subject. */
   trackPicking: boolean;
+  /** How many seconds to follow the subject after the placed circle. */
+  trackDuration: number;
 
   // ---- export --------------------------------------------------------------
   exportJobs: ExportJobInfo[];
@@ -134,6 +136,7 @@ interface EditorState {
 
   setPxPerSec: (v: number) => void;
   setTrackPicking: (v: boolean) => void;
+  setTrackDuration: (v: number) => void;
 
   setExportModalOpen: (v: boolean) => void;
   upsertExportJob: (job: ExportJobInfo) => void;
@@ -216,6 +219,7 @@ export const useEditorStore = create<EditorState>()(
 
   pxPerSec: 12,
   trackPicking: false,
+  trackDuration: 8,
 
   exportJobs: [],
   exportModalOpen: false,
@@ -570,6 +574,7 @@ export const useEditorStore = create<EditorState>()(
 
   setPxPerSec: (v) => set({ pxPerSec: clamp(v, 2, 120) }),
   setTrackPicking: (trackPicking) => set({ trackPicking }),
+  setTrackDuration: (trackDuration) => set({ trackDuration }),
 
   setExportModalOpen: (exportModalOpen) => set({ exportModalOpen }),
   setDetailClip: (detailClipId) => set({ detailClipId }),

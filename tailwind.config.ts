@@ -14,15 +14,17 @@ const config: Config = {
           600: "#2a3040",
           500: "#3b4256",
         },
+        // Monochrome accent — the whole UI reads black & white / minimal.
         accent: {
-          DEFAULT: "#7c5cff",
-          soft: "#9d86ff",
-          glow: "#b7a6ff",
+          DEFAULT: "#fafafa",
+          soft: "#e5e5e5",
+          glow: "#ffffff",
         },
+        // Semantic score colors, desaturated to sit quietly in a B&W UI.
         brand: {
-          yellow: "#ffd400",
-          green: "#2dd4a0",
-          red: "#ff5c72",
+          yellow: "#d8d8d8",
+          green: "#ffffff",
+          red: "#8a8f9a",
         },
       },
       fontFamily: {
@@ -38,7 +40,7 @@ const config: Config = {
       boxShadow: {
         panel:
           "0 1px 0 0 rgba(255,255,255,0.04) inset, 0 8px 24px rgba(0,0,0,0.45)",
-        glow: "0 0 24px rgba(124,92,255,0.35)",
+        glow: "0 0 20px rgba(255,255,255,0.12)",
       },
     },
   },

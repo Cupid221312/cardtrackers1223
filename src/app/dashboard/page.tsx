@@ -28,13 +28,13 @@ export default async function DashboardPage() {
     <div className="min-h-screen bg-ink-950 text-slate-200">
       <header className="flex h-12 items-center justify-between border-b border-ink-700 bg-ink-900 px-5">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent shadow-glow">
-            <svg viewBox="0 0 24 24" className="h-4 w-4 fill-white">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white">
+            <svg viewBox="0 0 24 24" className="h-4 w-4 fill-ink-950">
               <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v13a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5v-13Zm6 3.6v5.8a.6.6 0 0 0 .92.5l4.55-2.9a.6.6 0 0 0 0-1l-4.55-2.9a.6.6 0 0 0-.92.5Z" />
             </svg>
           </div>
           <span className="text-sm font-bold text-white">
-            ClipForge <span className="font-medium text-accent-glow">Dashboard</span>
+            Clip <span className="font-medium text-accent-glow">Dashboard</span>
           </span>
         </div>
         <nav className="flex items-center gap-1 text-xs">

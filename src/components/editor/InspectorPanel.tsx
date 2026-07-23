@@ -95,6 +95,7 @@ export default function InspectorPanel() {
   const [reframeNote, setReframeNote] = useState("");
   const [energyZooming, setEnergyZooming] = useState(false);
   const trackPicking = useEditorStore((s) => s.trackPicking);
+  const trackDuration = useEditorStore((s) => s.trackDuration);
 
   async function autoZoomEnergy() {
     if (!source || !clip) return;
@@ -530,12 +531,23 @@ export default function InspectorPanel() {
           )}
           onClick={() => st().setTrackPicking(!trackPicking)}
           disabled={!clip || !source}
-          title="Drop a dot on a person or object in the preview — the frame will follow it"
+          title="Drop a circle on a person's head in the preview — the frame will follow them"
         >
           {trackPicking
-            ? "Click the subject in the preview…"
-            : "🎯 Track subject (place a dot)"}
+            ? "Click the subject's head in the preview…"
+            : "🎯 Track a head (place a circle)"}
         </button>
+        <div className="mt-1.5">
+          <Slider
+            label="Track for"
+            value={trackDuration}
+            min={1}
+            max={Math.max(2, Math.round((clip?.end ?? 30) - (clip?.start ?? 0)))}
+            step={1}
+            onChange={(v) => st().setTrackDuration(v)}
+            format={(v) => `${Math.round(v)}s`}
+          />
+        </div>
         <button
           className="btn-ghost mt-1.5 w-full !py-1.5 text-xs"
           onClick={() => {

@@ -3,7 +3,7 @@ import path from "path";
 import os from "os";
 import crypto from "crypto";
 import type { Transcript, TranscriptSegment, Word } from "@/lib/types";
-import { probeMedia, runFfmpeg } from "@/lib/server/media";
+import { probeMedia, runFfmpeg, runFfmpegCapture } from "@/lib/server/media";
 
 /**
  * Server-side transcription. With OPENAI_API_KEY set, audio is extracted
@@ -98,6 +98,86 @@ export async function transcribeWithWhisper(
   } finally {
     await fs.unlink(audioPath).catch(() => undefined);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Free local transcription (Whisper via transformers.js — no API, no credits)
+// ---------------------------------------------------------------------------
+
+// Cache the loaded ASR pipeline across requests (model load is expensive).
+let localAsr: unknown | null = null;
+let localAsrModel = "";
+
+/**
+ * Real speech-to-text that runs entirely on this machine using a small
+ * Whisper model (default whisper-tiny.en) via @huggingface/transformers.
+ * The model (~40MB) downloads once on first use and is cached on disk.
+ * Requires the optional dependency to be installed; the caller falls back
+ * to the demo transcript if it isn't or if anything goes wrong.
+ */
+export async function transcribeLocal(mediaPath: string): Promise<Transcript> {
+  const modelId = process.env.WHISPER_MODEL || "Xenova/whisper-tiny.en";
+
+  // Dynamic import so a missing optional dep never breaks build/startup.
+  const tf = (await import("@huggingface/transformers").catch(() => {
+    throw new Error("local transcription engine not installed");
+  })) as {
+    pipeline: (task: string, model: string) => Promise<unknown>;
+    env: { cacheDir?: string; allowRemoteModels?: boolean };
+  };
+
+  tf.env.cacheDir =
+    process.env.MODELS_DIR ||
+    path.join(process.env.DATA_DIR || process.cwd(), ".data", "models");
+  tf.env.allowRemoteModels = true;
+
+  if (!localAsr || localAsrModel !== modelId) {
+    localAsr = await tf.pipeline("automatic-speech-recognition", modelId);
+    localAsrModel = modelId;
+  }
+
+  // Decode audio to 16 kHz mono float32 PCM (what the model expects).
+  const pcm = await runFfmpegCapture([
+    "-i", mediaPath,
+    "-vn", "-ac", "1", "-ar", "16000", "-f", "f32le", "-",
+  ]);
+  const audio = new Float32Array(
+    pcm.buffer,
+    pcm.byteOffset,
+    Math.floor(pcm.byteLength / 4),
+  );
+
+  const asr = localAsr as (
+    input: Float32Array,
+    opts: Record<string, unknown>,
+  ) => Promise<{ text?: string; chunks?: Array<{ text: string; timestamp: [number, number | null] }> }>;
+
+  const out = await asr(audio, {
+    return_timestamps: "word",
+    chunk_length_s: 30,
+    stride_length_s: 5,
+  });
+
+  const chunks = out.chunks ?? [];
+  const words: Word[] = [];
+  for (let i = 0; i < chunks.length; i++) {
+    const c = chunks[i];
+    const text = c.text.trim();
+    if (!text) continue;
+    const start = c.timestamp[0] ?? (words.length ? words[words.length - 1].end : 0);
+    const end =
+      c.timestamp[1] ??
+      (chunks[i + 1]?.timestamp[0] ?? start + 0.3);
+    words.push({ id: `w-${words.length}`, text, start, end: Math.max(end, start + 0.05) });
+  }
+  if (words.length === 0) throw new Error("local transcription returned no words");
+
+  return {
+    words,
+    segments: segmentWords(words),
+    language: "en",
+    source: "whisper",
+  };
 }
 
 // ---------------------------------------------------------------------------

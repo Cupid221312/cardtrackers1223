@@ -10,6 +10,7 @@ const nextConfig = {
       "@ffmpeg-installer/ffmpeg",
       "@ffprobe-installer/ffprobe",
       "@distube/ytdl-core",
+      "@huggingface/transformers",
     ],
   },
 };

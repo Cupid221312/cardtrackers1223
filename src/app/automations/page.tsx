@@ -103,7 +103,7 @@ export default function AutomationsPage() {
     <div className="min-h-screen bg-ink-950 text-slate-200">
       <header className="flex h-12 items-center justify-between border-b border-ink-700 bg-ink-900 px-5">
         <span className="text-sm font-bold text-white">
-          ClipForge <span className="font-medium text-accent-glow">Automations</span>
+          Clip <span className="font-medium text-accent-glow">Automations</span>
         </span>
         <nav className="flex items-center gap-1 text-xs">
           <Link href="/" className="rounded-md px-2 py-1 font-medium text-slate-400 hover:bg-ink-700 hover:text-white">
@@ -121,7 +121,7 @@ export default function AutomationsPage() {
           here. A deployed worker polls each creator for new VODs, auto-clips
           them, keeps clips scoring ≥ your threshold, and publishes to the
           connected accounts. Posting needs a real access token from each
-          platform&apos;s developer console (below) — ClipForge never
+          platform&apos;s developer console (below) — Clip never
           fabricates credentials, and live posting cannot run inside a
           preview sandbox.
         </div>

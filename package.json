@@ -25,6 +25,10 @@
     "zundo": "^2.3.0",
     "zustand": "^5.0.3"
   },
+  "_comment_optional": "@huggingface/transformers powers free local speech-to-text; it is OPTIONAL so a failed native build (onnxruntime/sharp) never breaks the core install — the app falls back to a demo transcript when it is absent.",
+  "optionalDependencies": {
+    "@huggingface/transformers": "^3.0.2"
+  },
   "devDependencies": {
     "@types/node": "^20",
     "@types/react": "^18",

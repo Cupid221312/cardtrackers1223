@@ -78,8 +78,12 @@ export default function PreviewCanvas() {
 
     const s = useEditorStore.getState();
     const time = Math.min(Math.max(s.currentTime, clip.start), clip.end);
+    // Follow the subject from where the circle was placed, for the chosen
+    // number of seconds (clamped to the clip).
+    const trackStart = time;
+    const trackEnd = Math.min(time + s.trackDuration, clip.end);
     setTrackDot({ x: offX + px * contentW, y: offY + py * contentH });
-    setTrackStatus("Tracking subject…");
+    setTrackStatus(`Tracking subject for ${Math.round(trackEnd - trackStart)}s…`);
     s.setTrackPicking(false);
     s.setPlaying(false);
     try {
@@ -87,8 +91,8 @@ export default function PreviewCanvas() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          start: clip.start,
-          end: clip.end,
+          start: trackStart,
+          end: trackEnd,
           time,
           point: { x: px, y: py },
         }),
@@ -352,9 +356,13 @@ export default function PreviewCanvas() {
             )}
             {trackDot && (
               <div
-                className="pointer-events-none absolute z-40 h-4 w-4 -translate-x-1/2 -translate-y-1/2 animate-ping rounded-full border-2 border-brand-yellow bg-brand-yellow/40"
+                className="pointer-events-none absolute z-40 -translate-x-1/2 -translate-y-1/2"
                 style={{ left: trackDot.x, top: trackDot.y }}
-              />
+              >
+                {/* the placed "ball" on the subject's head + a pulsing halo */}
+                <div className="absolute left-1/2 top-1/2 h-12 w-12 -translate-x-1/2 -translate-y-1/2 animate-ping rounded-full border-2 border-white/70" />
+                <div className="h-6 w-6 rounded-full border-2 border-white bg-white/30 shadow-glow" />
+              </div>
             )}
           </>
         ) : (
