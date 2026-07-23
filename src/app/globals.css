@@ -100,14 +100,24 @@ input[type="range"].slider::-moz-range-thumb {
 @keyframes caption-fade-in {
   from {
     opacity: 0;
+    transform: scale(0.94);
   }
   to {
     opacity: 1;
+    transform: scale(1);
   }
 }
 @keyframes caption-pop-in {
   0% {
-    transform: scale(1.12);
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+  80% {
+    transform: scale(0.96);
   }
   100% {
     transform: scale(1);
@@ -115,7 +125,7 @@ input[type="range"].slider::-moz-range-thumb {
 }
 @keyframes caption-slide-in {
   from {
-    transform: translateY(28%);
+    transform: translateY(60%);
     opacity: 0;
   }
   to {
@@ -125,26 +135,52 @@ input[type="range"].slider::-moz-range-thumb {
 }
 @keyframes caption-bounce-in {
   0% {
-    transform: scale(0.7);
+    transform: scale(0.3) translateY(20%);
+    opacity: 0;
   }
-  60% {
-    transform: scale(1.12);
+  55% {
+    transform: scale(1.22) translateY(-4%);
+    opacity: 1;
+  }
+  75% {
+    transform: scale(0.92);
+  }
+  90% {
+    transform: scale(1.04);
   }
   100% {
-    transform: scale(1);
+    transform: scale(1) translateY(0);
+  }
+}
+/* Per-word "punch": the active karaoke word springs as it's spoken. */
+@keyframes caption-word-pop {
+  0% {
+    transform: scale(0.62);
+  }
+  55% {
+    transform: scale(1.18);
+  }
+  78% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1.06);
   }
 }
 .caption-anim-fade {
-  animation: caption-fade-in 140ms ease-out;
+  animation: caption-fade-in 200ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .caption-anim-pop {
-  animation: caption-pop-in 120ms ease-out;
+  animation: caption-pop-in 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .caption-anim-slide {
-  animation: caption-slide-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: caption-slide-in 300ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 .caption-anim-bounce {
-  animation: caption-bounce-in 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: caption-bounce-in 460ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.caption-word-pop {
+  animation: caption-word-pop 260ms cubic-bezier(0.34, 1.7, 0.5, 1) both;
 }
 
 /* --- overlay animations (graphic cards/pills/emoji/arrows) --------- */

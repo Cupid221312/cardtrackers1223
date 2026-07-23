@@ -196,17 +196,23 @@ export function buildAssDocument(opts: {
     );
   }
 
-  // Entrance animations, mirrored from the preview. fade/slide/bounce all
-  // burn in as a fade-in (slide/bounce add motion only in the live
-  // preview); pop scales the highlighted word.
+  // Entrance animations, mirrored from the preview. Spring easing is faked
+  // with chained \t (linear ramps): shrink→overshoot→settle.
   const fadeTag =
-    style.animation === "fade" ||
-    style.animation === "slide" ||
-    style.animation === "bounce"
-      ? "{\\fad(140,0)}"
-      : "";
+    style.animation === "fade" || style.animation === "slide"
+      ? "{\\fad(160,0)}"
+      : style.animation === "bounce" && !style.karaoke
+        ? "{\\fad(70,0)\\fscx40\\fscy40\\t(0,110,\\fscx114\\fscy114)\\t(110,250,\\fscx100\\fscy100)}"
+        : style.animation === "pop" && !style.karaoke
+          ? "{\\fscx60\\fscy60\\t(0,90,\\fscx112\\fscy112)\\t(90,210,\\fscx100\\fscy100)}"
+          : "";
+  // Per-word punch on the active karaoke word (pop/bounce): a springy
+  // shrink→overshoot→settle each time the word begins.
   const popTag =
-    style.animation === "pop" ? "\\fscx112\\fscy112\\t(0,120,\\fscx100\\fscy100)" : "";
+    style.karaoke &&
+    (style.animation === "pop" || style.animation === "bounce")
+      ? "\\fscx55\\fscy55\\t(0,90,\\fscx116\\fscy116)\\t(90,220,\\fscx100\\fscy100)"
+      : "";
 
   const activeColor = assColor(style.activeColor);
   const activeBg = style.activeBgColor ? assColor(style.activeBgColor) : "";

@@ -97,10 +97,20 @@ export default function CaptionOverlay({
             ? `0 ${Math.round(fontPx * 0.06)}px ${Math.round(fontPx * 0.14)}px rgba(0,0,0,0.55)`
             : undefined;
           const hasChip = isActive && !!style.activeBgColor;
+          // Per-word "punch": the active karaoke word springs each time it
+          // changes. Keying on active state remounts the span so the CSS
+          // animation replays for every new word (not just the first).
+          const springWord =
+            isActive &&
+            style.karaoke &&
+            (style.animation === "pop" || style.animation === "bounce");
           return (
             <span
-              key={word.id}
-              className="inline-block transition-transform duration-100"
+              key={`${word.id}-${isActive}`}
+              className={clsx(
+                "inline-block transition-transform duration-100",
+                springWord && "caption-word-pop",
+              )}
               style={{
                 color,
                 WebkitTextStrokeWidth: hasStroke ? `${strokePx}px` : undefined,
@@ -113,9 +123,10 @@ export default function CaptionOverlay({
                 boxShadow: hasChip
                   ? `0 ${Math.round(fontPx * 0.05)}px ${Math.round(fontPx * 0.12)}px rgba(0,0,0,0.35)`
                   : undefined,
-                transform:
-                  isActive && (style.animation === "pop" || style.animation === "bounce")
-                    ? "scale(1.1)"
+                transform: springWord
+                  ? undefined
+                  : isActive && !style.karaoke && style.animation === "pop"
+                    ? "scale(1.06)"
                     : "scale(1)",
               }}
             >
