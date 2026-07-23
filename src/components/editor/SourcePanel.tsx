@@ -223,7 +223,10 @@ export default function SourcePanel() {
         }),
       );
       s.setClips(body.clips as ClipCandidate[]);
-      if (body.clips.length > 0) s.selectClip(body.clips[0].id);
+      if (body.clips.length > 0) {
+        s.selectClip(body.clips[0].id);
+        s.setGalleryOpen(true); // show the ranked results grid
+      }
     } catch {
       // Server route unavailable — heuristics run identically client-side.
       const clips = findClips(tr, s.clipFinderSettings, {
@@ -231,7 +234,10 @@ export default function SourcePanel() {
         peaksDuration: audio?.peaksDuration,
       });
       s.setClips(clips);
-      if (clips.length > 0) s.selectClip(clips[0].id);
+      if (clips.length > 0) {
+        s.selectClip(clips[0].id);
+        s.setGalleryOpen(true);
+      }
     } finally {
       s.setDetectingClips(false);
     }

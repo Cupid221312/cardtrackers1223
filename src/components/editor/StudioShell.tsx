@@ -8,6 +8,7 @@ import InspectorPanel from "@/components/editor/InspectorPanel";
 import Timeline from "@/components/timeline/Timeline";
 import ExportQueueModal from "@/components/editor/ExportQueueModal";
 import ClipDetailModal from "@/components/editor/ClipDetailModal";
+import ClipsGallery from "@/components/editor/ClipsGallery";
 import ShortcutHelp from "@/components/editor/ShortcutHelp";
 import Link from "next/link";
 import { redoEdit, undoEdit, useEditorStore } from "@/lib/store/editorStore";
@@ -22,6 +23,8 @@ export default function StudioShell() {
   useProjectAutosave();
 
   const setExportModalOpen = useEditorStore((s) => s.setExportModalOpen);
+  const setGalleryOpen = useEditorStore((s) => s.setGalleryOpen);
+  const clipCount = useEditorStore((s) => s.clips.length);
   const hasSource = useEditorStore((s) => s.source !== null);
   const jobs = useEditorStore((s) => s.exportJobs);
   const canUndo = useStore(useEditorStore.temporal, (s) => s.pastStates.length > 0);
@@ -81,6 +84,21 @@ export default function StudioShell() {
               <path d="M7.83 11H14a5 5 0 0 1 0 10h-3a1 1 0 1 1 0-2h3a3 3 0 0 0 0-6H7.83l2.58 2.59a1 1 0 1 1-1.41 1.41l-4.3-4.29a1 1 0 0 1 0-1.42l4.3-4.29a1 1 0 0 1 1.41 1.41L7.83 11Z" />
             </svg>
           </button>
+          {clipCount > 0 && (
+            <button
+              className="btn-ghost ml-1.5 flex items-center gap-1.5 !py-1.5 text-xs"
+              onClick={() => setGalleryOpen(true)}
+              title="View all detected clips"
+            >
+              <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current">
+                <path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 0h7v7h-7v-7Z" />
+              </svg>
+              Clips
+              <span className="rounded-full bg-accent/20 px-1.5 text-[10px] font-bold text-accent-glow">
+                {clipCount}
+              </span>
+            </button>
+          )}
           <button
             className="btn-primary relative ml-1.5 flex items-center gap-2 !py-1.5"
             onClick={() => setExportModalOpen(true)}
@@ -121,6 +139,7 @@ export default function StudioShell() {
 
       <ExportQueueModal />
       <ClipDetailModal />
+      <ClipsGallery />
       <ShortcutHelp />
     </div>
   );

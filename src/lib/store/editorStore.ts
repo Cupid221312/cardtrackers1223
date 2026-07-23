@@ -77,9 +77,12 @@ interface EditorState {
 
   /** Clip whose rating/analysis detail modal is open, or null. */
   detailClipId: string | null;
+  /** Whether the full-screen clips results gallery is open. */
+  galleryOpen: boolean;
 
   // ---- actions -------------------------------------------------------------
   setDetailClip: (clipId: string | null) => void;
+  setGalleryOpen: (v: boolean) => void;
   setSource: (source: SourceMedia | null) => void;
   setIngesting: (v: boolean, error?: string) => void;
   setTranscribing: (v: boolean) => void;
@@ -213,6 +216,7 @@ export const useEditorStore = create<EditorState>()(
   exportJobs: [],
   exportModalOpen: false,
   detailClipId: null,
+  galleryOpen: false,
 
   setSource: (source) =>
     set({
@@ -563,6 +567,7 @@ export const useEditorStore = create<EditorState>()(
 
   setExportModalOpen: (exportModalOpen) => set({ exportModalOpen }),
   setDetailClip: (detailClipId) => set({ detailClipId }),
+  setGalleryOpen: (galleryOpen) => set({ galleryOpen }),
   upsertExportJob: (job) =>
     set((s) => {
       const idx = s.exportJobs.findIndex((j) => j.id === job.id);
