@@ -90,44 +90,32 @@ export default function CaptionOverlay({
             const frac = Math.min(1, Math.max(0, (currentTime - word.start) / dur));
             typedCount = Math.max(1, Math.ceil(frac * word.text.length));
           }
-          const shadowParts: string[] = [];
-          if (strokePx > 0 && style.strokeColor) {
-            // Multi-direction shadow fakes a heavy stroke more cleanly than
-            // -webkit-text-stroke at large sizes.
-            const r = Math.max(1, strokePx);
-            shadowParts.push(
-              `${r}px ${r}px 0 ${style.strokeColor}`,
-              `-${r}px ${r}px 0 ${style.strokeColor}`,
-              `${r}px -${r}px 0 ${style.strokeColor}`,
-              `-${r}px -${r}px 0 ${style.strokeColor}`,
-              `0 ${r}px 0 ${style.strokeColor}`,
-              `0 -${r}px 0 ${style.strokeColor}`,
-              `${r}px 0 0 ${style.strokeColor}`,
-              `-${r}px 0 0 ${style.strokeColor}`,
-            );
-          }
-          if (style.shadow) {
-            shadowParts.push(`0 ${fontPx * 0.08}px ${fontPx * 0.2}px rgba(0,0,0,0.7)`);
-          }
+          // Crisp outline via paint-order stroke (matches libass), plus a soft
+          // drop shadow for depth so text reads on any background.
+          const hasStroke = strokePx > 0 && !!style.strokeColor;
+          const dropShadow = style.shadow
+            ? `0 ${Math.round(fontPx * 0.06)}px ${Math.round(fontPx * 0.14)}px rgba(0,0,0,0.55)`
+            : undefined;
+          const hasChip = isActive && !!style.activeBgColor;
           return (
             <span
               key={word.id}
-              className="inline-block transition-transform duration-75"
+              className="inline-block transition-transform duration-100"
               style={{
                 color,
-                textShadow: shadowParts.join(", ") || undefined,
-                backgroundColor:
-                  isActive && style.activeBgColor
-                    ? style.activeBgColor
-                    : undefined,
-                borderRadius: isActive && style.activeBgColor ? fontPx * 0.18 : 0,
-                padding:
-                  isActive && style.activeBgColor
-                    ? `0 ${fontPx * 0.18}px`
-                    : undefined,
+                WebkitTextStrokeWidth: hasStroke ? `${strokePx}px` : undefined,
+                WebkitTextStrokeColor: hasStroke ? style.strokeColor : undefined,
+                paintOrder: "stroke fill",
+                textShadow: dropShadow,
+                backgroundColor: hasChip ? style.activeBgColor : undefined,
+                borderRadius: hasChip ? fontPx * 0.22 : 0,
+                padding: hasChip ? `${fontPx * 0.02}px ${fontPx * 0.22}px` : undefined,
+                boxShadow: hasChip
+                  ? `0 ${Math.round(fontPx * 0.05)}px ${Math.round(fontPx * 0.12)}px rgba(0,0,0,0.35)`
+                  : undefined,
                 transform:
-                  isActive && style.animation === "pop"
-                    ? "scale(1.08)"
+                  isActive && (style.animation === "pop" || style.animation === "bounce")
+                    ? "scale(1.1)"
                     : "scale(1)",
               }}
             >
