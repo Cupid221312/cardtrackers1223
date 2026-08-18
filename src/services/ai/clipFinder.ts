@@ -10,7 +10,10 @@ import {
   rateClip,
   sceneAnalysis,
 } from "@/services/ai/rating";
-import { findClipsFromSignals } from "@/services/ai/signalClipFinder";
+import {
+  findClipsFromSignals,
+  normalizeSettings,
+} from "@/services/ai/signalClipFinder";
 
 /**
  * Heuristic viral-moment detector. Scores every transcript segment on
@@ -150,9 +153,11 @@ function makeTitle(segment: TranscriptSegment): string {
 
 export function findClips(
   transcript: Transcript | null,
-  settings: ClipFinderSettings,
+  rawSettings: ClipFinderSettings,
   inputs: ClipFinderInputs = {},
 ): ClipCandidate[] {
+  // A backwards range saved to localStorage would otherwise return nothing.
+  const settings = normalizeSettings(rawSettings);
   const segments = transcript?.segments ?? [];
 
   // A placeholder transcript describes a *different* video, so its segment

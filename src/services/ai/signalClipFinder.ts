@@ -54,6 +54,24 @@ function stats(values: number[]): { mean: number; sd: number } {
 
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 
+/**
+ * Repair an inverted duration range.
+ *
+ * Settings persist to localStorage, so a range that was saved backwards
+ * (min 30 / max 6) keeps returning zero clips on every later run until the
+ * user happens to retype a field. Swapping here fixes those saved states
+ * without asking anyone to clear storage.
+ */
+export function normalizeSettings(s: ClipFinderSettings): ClipFinderSettings {
+  const lo = Math.max(1, Math.min(s.minDuration, s.maxDuration));
+  const hi = Math.max(lo + 1, Math.max(s.minDuration, s.maxDuration));
+  return {
+    minDuration: lo,
+    maxDuration: hi,
+    maxClips: Math.max(1, Math.min(50, s.maxClips || 1)),
+  };
+}
+
 /** Slice of the peaks array covering [start,end). */
 function peakSlice(
   start: number,
@@ -125,8 +143,9 @@ function describeMultiple(value: number, mean: number): string {
  */
 export function findClipsFromSignals(
   inputs: SignalInputs,
-  settings: ClipFinderSettings,
+  rawSettings: ClipFinderSettings,
 ): ClipCandidate[] {
+  const settings = normalizeSettings(rawSettings);
   const { duration } = inputs;
   if (!duration || duration <= 0) return [];
 

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { findClipsFromSignals } from "@/services/ai/signalClipFinder";
+import {
+  findClipsFromSignals,
+  normalizeSettings,
+} from "@/services/ai/signalClipFinder";
 import { findClips } from "@/services/ai/clipFinder";
 import type { ClipFinderSettings, Transcript } from "@/lib/types";
 
@@ -89,6 +92,32 @@ describe("findClipsFromSignals", () => {
   it("returns nothing when no signals are available", () => {
     expect(findClipsFromSignals({ duration: 600 }, settings)).toEqual([]);
     expect(findClipsFromSignals({ duration: 0, peaks: [1, 2, 3] }, settings)).toEqual([]);
+  });
+});
+
+describe("normalizeSettings", () => {
+  it("repairs a range saved backwards instead of returning no clips", () => {
+    // Exactly the state a user can persist by typing Min before Max.
+    const broken = { minDuration: 30, maxDuration: 6, maxClips: 9 };
+    expect(normalizeSettings(broken)).toEqual({
+      minDuration: 6,
+      maxDuration: 30,
+      maxClips: 9,
+    });
+    const clips = findClipsFromSignals(
+      { duration: 600, peaks: peaksWithBurstsAt([120, 400]), peaksDuration: 600 },
+      broken,
+    );
+    expect(clips.length).toBeGreaterThan(0);
+  });
+
+  it("leaves a valid range untouched", () => {
+    expect(normalizeSettings(settings)).toEqual(settings);
+  });
+
+  it("keeps min and max from collapsing onto each other", () => {
+    const r = normalizeSettings({ minDuration: 20, maxDuration: 20, maxClips: 3 });
+    expect(r.maxDuration).toBeGreaterThan(r.minDuration);
   });
 });
 

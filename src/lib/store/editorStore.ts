@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { temporal } from "zundo";
+import { normalizeSettings } from "@/services/ai/signalClipFinder";
 import type {
   AudioSettings,
   CaptionLine,
@@ -633,6 +634,12 @@ export const useEditorStore = create<EditorState>()(
           silenceCut: { ...current.silenceCut, ...p.silenceCut },
           progressBar: { ...current.progressBar, ...p.progressBar },
           overlays: p.overlays ?? current.overlays,
+          // Repair a range saved backwards (min above max), which otherwise
+          // keeps the clip finder returning nothing on every future run.
+          clipFinderSettings: normalizeSettings({
+            ...current.clipFinderSettings,
+            ...p.clipFinderSettings,
+          }),
         };
       },
       },

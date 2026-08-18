@@ -27,17 +27,59 @@
   src: url("/fonts/ArchivoBlack-Regular.ttf") format("truetype");
 }
 
+/* Design tokens — clarity, deference, depth.
+   Content dominates and chrome recedes: surfaces are layered translucent
+   materials rather than solid boxes with hard borders, hierarchy comes from
+   an opacity ladder rather than a spread of colors, and motion is springy
+   rather than linear. One restrained accent; everything else is the ladder. */
 :root {
   color-scheme: dark;
+
+  --bg: #08090c;
+  --surface-1: rgba(255, 255, 255, 0.04);
+  --surface-2: rgba(255, 255, 255, 0.07);
+  --material: rgba(18, 19, 24, 0.72);
+  --hairline: rgba(255, 255, 255, 0.1);
+  --hairline-strong: rgba(255, 255, 255, 0.16);
+
+  /* Monochrome accent — the brand is black & white, so the "one accent
+     color" the system allows is near-white rather than a hue. */
+  --accent: #fafafa;
+  --accent-press: #d4d4d4;
+
+  --text-primary: rgba(255, 255, 255, 0.92);
+  --text-secondary: rgba(255, 255, 255, 0.55);
+  --text-tertiary: rgba(255, 255, 255, 0.3);
+
+  --r-sm: 10px;
+  --r-md: 16px;
+  --r-lg: 22px;
+  --r-xl: 28px;
+
+  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --dur-fast: 140ms;
+  --dur-base: 240ms;
 }
 
 html,
 body {
   height: 100%;
-  background: #08090c;
-  color: #e8eaf2;
+  background: var(--bg);
+  color: var(--text-primary);
   font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   overscroll-behavior: none;
+  /* Tighter tracking on display text reads as considered rather than default. */
+  letter-spacing: -0.01em;
+}
+
+/* Every interactive surface eases the same way, so the app feels like one
+   physical system instead of a set of unrelated widgets. */
+button,
+input,
+select,
+a {
+  transition-timing-function: var(--ease-spring);
+  transition-duration: var(--dur-fast);
 }
 
 /* Heavy caption face without a webfont fetch: fall back through the classic
@@ -73,23 +115,58 @@ input[type="range"].slider::-moz-range-thumb {
   @apply h-3.5 w-3.5 rounded-full border-0 bg-accent;
 }
 
+/* A floating translucent material with a hairline edge — depth without
+   drawing a hard box around everything. */
 .panel {
-  @apply rounded-xl border border-ink-700 bg-ink-850 shadow-panel;
+  background: var(--material);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.04) inset,
+    0 8px 32px -12px rgba(0, 0, 0, 0.7);
 }
 
 .panel-title {
-  @apply text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400;
+  @apply text-[11px] font-semibold uppercase tracking-[0.14em];
+  color: var(--text-secondary);
 }
 
 .btn-primary {
-  @apply rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-ink-950 transition
-    hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-40;
+  @apply px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40;
+  background: var(--accent);
+  color: #0a0a0c;
+  border-radius: var(--r-sm);
+  transition:
+    transform var(--dur-fast) var(--ease-spring),
+    background var(--dur-fast) var(--ease-spring);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-press);
+}
+/* Buttons compress under the finger rather than just changing color. */
+.btn-primary:active:not(:disabled) {
+  transform: scale(0.97);
 }
 
 .btn-ghost {
-  @apply rounded-lg border border-ink-600 bg-ink-800 px-3 py-2 text-sm font-medium
-    text-slate-200 transition hover:border-ink-500 hover:bg-ink-700
-    disabled:cursor-not-allowed disabled:opacity-40;
+  @apply px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40;
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  color: var(--text-primary);
+  transition:
+    transform var(--dur-fast) var(--ease-spring),
+    background var(--dur-fast) var(--ease-spring),
+    border-color var(--dur-fast) var(--ease-spring);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--hairline-strong);
+}
+.btn-ghost:active:not(:disabled) {
+  transform: scale(0.97);
 }
 
 .field-label {
@@ -215,7 +292,18 @@ input[type="range"].slider::-moz-range-thumb {
 }
 
 .text-input {
-  @apply w-full rounded-lg border border-ink-600 bg-ink-900 px-3 py-2 text-sm
-    text-slate-100 placeholder-slate-500 outline-none transition
-    focus:border-accent/60 focus:ring-1 focus:ring-accent/40;
+  @apply w-full px-3 py-2 text-sm outline-none;
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  color: var(--text-primary);
+  transition: border-color var(--dur-fast) var(--ease-spring),
+    box-shadow var(--dur-fast) var(--ease-spring);
+}
+.text-input::placeholder {
+  color: var(--text-tertiary);
+}
+.text-input:focus {
+  border-color: var(--hairline-strong);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
 }
