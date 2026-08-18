@@ -49,7 +49,7 @@ async function decodeAudio(mediaId: string): Promise<Float32Array> {
   const AC: typeof AudioContext =
     (window as any).AudioContext || (window as any).webkitAudioContext;
   const tmp = new AC();
-  const decoded = await tmp.decodeAudioData(arr.slice(0));
+  const decoded = await tmp.decodeAudioData(arr);
   await tmp.close();
   // Resample to exactly 16 kHz mono (what Whisper expects).
   const Offline: typeof OfflineAudioContext =
@@ -87,36 +87,81 @@ function segmentWords(words: Word[]): TranscriptSegment[] {
   return segments;
 }
 
+/** Seconds of audio handed to the model at a time. */
+const BLOCK_SECONDS = 120;
+const SAMPLE_RATE = 16000;
+
+/**
+ * Transcribe in bounded blocks rather than one giant call.
+ *
+ * Feeding a full-length VOD to the WASM model at once allocates hundreds of
+ * megabytes and locks the tab for minutes — on a 15-minute video that reads
+ * as a crash. Blocks keep peak memory flat, let us report real progress, and
+ * give the event loop a breath between passes so the UI stays interactive.
+ * `onPartial` receives the transcript so far, so captions can appear while the
+ * rest is still being processed.
+ */
 export async function transcribeInBrowser(
   mediaId: string,
   onProgress: (msg: string) => void = () => {},
   model = "Xenova/whisper-tiny.en",
+  onPartial?: (t: Transcript) => void,
 ): Promise<Transcript> {
   const pipe = await loadPipeline(model, onProgress);
   onProgress("Decoding audio…");
   const audio = await decodeAudio(mediaId);
-  onProgress("Transcribing… (this can take a minute on a long video)");
-  const out = await pipe(audio, {
-    return_timestamps: "word",
-    chunk_length_s: 30,
-    stride_length_s: 5,
-  });
 
-  const chunks = out.chunks ?? [];
+  const totalSeconds = audio.length / SAMPLE_RATE;
+  const blockSamples = BLOCK_SECONDS * SAMPLE_RATE;
+  const blockCount = Math.max(1, Math.ceil(audio.length / blockSamples));
   const words: Word[] = [];
-  for (let i = 0; i < chunks.length; i++) {
-    const text = chunks[i].text.trim();
-    if (!text) continue;
-    const start =
-      chunks[i].timestamp[0] ?? (words.length ? words[words.length - 1].end : 0);
-    const end = chunks[i].timestamp[1] ?? (chunks[i + 1]?.timestamp[0] ?? start + 0.3);
-    words.push({
-      id: `w-${words.length}`,
-      text,
-      start,
-      end: Math.max(end, start + 0.05),
+
+  for (let b = 0; b < blockCount; b++) {
+    const offsetSamples = b * blockSamples;
+    const block = audio.subarray(
+      offsetSamples,
+      Math.min(audio.length, offsetSamples + blockSamples),
+    );
+    const offsetSeconds = offsetSamples / SAMPLE_RATE;
+    const pct = Math.round((offsetSeconds / totalSeconds) * 100);
+    onProgress(`Transcribing… ${pct}% (${b + 1}/${blockCount})`);
+
+    const out = await pipe(block, {
+      return_timestamps: "word",
+      chunk_length_s: 30,
+      stride_length_s: 5,
     });
+
+    const chunks = out.chunks ?? [];
+    for (let i = 0; i < chunks.length; i++) {
+      const text = chunks[i].text.trim();
+      if (!text) continue;
+      const rel =
+        chunks[i].timestamp[0] ??
+        (words.length ? words[words.length - 1].end - offsetSeconds : 0);
+      const relEnd =
+        chunks[i].timestamp[1] ?? chunks[i + 1]?.timestamp[0] ?? rel + 0.3;
+      const start = offsetSeconds + rel;
+      words.push({
+        id: `w-${words.length}`,
+        text,
+        start,
+        end: Math.max(offsetSeconds + relEnd, start + 0.05),
+      });
+    }
+
+    if (onPartial && words.length > 0) {
+      onPartial({
+        words: [...words],
+        segments: segmentWords(words),
+        language: "en",
+        source: "whisper",
+      });
+    }
+    // Yield so the browser can paint between blocks.
+    await new Promise((r) => setTimeout(r, 0));
   }
+
   if (words.length === 0) throw new Error("no speech detected");
   return { words, segments: segmentWords(words), language: "en", source: "whisper" };
 }

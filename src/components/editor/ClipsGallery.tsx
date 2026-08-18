@@ -175,13 +175,14 @@ function ClipCard({
         </span>
       </div>
 
-      {/* meta */}
+      {/* meta — see SignalBreakdown below for the "why this clip" bars */}
       <div className="flex flex-1 flex-col p-2.5">
         <p className="line-clamp-2 text-xs font-bold text-white">{clip.title}</p>
         <GradeChips rating={clip.rating} />
         <p className="mt-1.5 line-clamp-2 text-[10px] text-slate-500">
           {clip.reason}
         </p>
+        <SignalBreakdown clip={clip} />
         <div className="mt-auto flex gap-1.5 pt-2.5">
           <button className="btn-primary flex-1 !py-1.5 text-[11px]" onClick={edit}>
             Edit
@@ -202,6 +203,50 @@ function ClipCard({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Colour per signal family, so the source of a score is readable at a glance. */
+const FAMILY_STYLE: Record<string, string> = {
+  acoustic: "bg-brand-green",
+  visual: "bg-brand-yellow",
+  language: "bg-accent",
+  chat: "bg-brand-red",
+  metadata: "bg-slate-500",
+};
+
+/**
+ * "Why this clip" — the signal breakdown behind the score.
+ *
+ * Competing clippers show a number and nothing else. Showing the contributing
+ * signals lets creators trust the ranking and, over time, learn what actually
+ * makes their content pop.
+ */
+function SignalBreakdown({ clip }: { clip: ClipCandidate }) {
+  const signals = clip.signals ?? [];
+  if (signals.length === 0) return null;
+  return (
+    <div className="mt-2 space-y-1">
+      {signals.slice(0, 3).map((sig) => (
+        <div key={sig.label} className="flex items-center gap-1.5">
+          <span className="w-[74px] shrink-0 truncate text-[9px] uppercase text-slate-500">
+            {sig.label}
+          </span>
+          <span className="h-1 flex-1 overflow-hidden rounded-full bg-white/10">
+            <span
+              className={clsx(
+                "block h-full rounded-full transition-[width] duration-500",
+                FAMILY_STYLE[sig.family] ?? "bg-slate-500",
+              )}
+              style={{ width: `${Math.max(3, Math.min(100, sig.strength))}%` }}
+            />
+          </span>
+          <span className="w-6 shrink-0 text-right text-[9px] tabular-nums text-slate-500">
+            {sig.strength}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }

@@ -28,6 +28,21 @@ export default function VideoTrack({
 
   const duration = source?.duration ?? 0;
 
+  // Frames render 36px tall (52px track minus the 8px inset each side) at the
+  // source's aspect ratio. Quantizing to steps of 16 keeps zooming from
+  // re-rendering a new sprite on every pixel of change.
+  const STRIP_HEIGHT = 36;
+  const aspect =
+    source?.width && source?.height ? source.width / source.height : 16 / 9;
+  const frameWidth = Math.max(24, STRIP_HEIGHT * aspect);
+  const tileCount = Math.max(
+    16,
+    Math.min(
+      600,
+      Math.round((duration * pxPerSec) / frameWidth / 16) * 16 || 16,
+    ),
+  );
+
   function dragEdge(
     e: React.PointerEvent,
     clipId: string,
@@ -85,9 +100,11 @@ export default function VideoTrack({
           style={{
             left: 0,
             width: duration * pxPerSec,
-            // Real filmstrip sprite (20 frames tiled server-side); the
-            // gradient behind it shows until the strip loads.
-            backgroundImage: `url(/api/media/${source.mediaId}/thumbs), linear-gradient(to right, #1e2330, #2a3040)`,
+            // Ask for exactly as many frames as fit across the strip, so the
+            // sprite draws 1:1 and each frame keeps its aspect ratio. Sizing
+            // a fixed frame count to the strip instead smears every frame
+            // horizontally as soon as you zoom.
+            backgroundImage: `url(/api/media/${source.mediaId}/thumbs?tiles=${tileCount}), linear-gradient(to right, #1e2330, #2a3040)`,
             backgroundSize: "100% 100%",
             opacity: 0.85,
           }}

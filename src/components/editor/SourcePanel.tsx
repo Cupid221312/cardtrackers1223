@@ -225,30 +225,40 @@ export default function SourcePanel() {
         }),
       );
       const serverTranscript = body.transcript as Transcript;
-
-      // If the server could only give a placeholder (no key / no local
-      // engine), transcribe for real IN THE BROWSER — free, no account.
-      if (allowBrowserStt && serverTranscript.source !== "whisper") {
-        try {
-          const { transcribeInBrowser } = await import(
-            "@/services/ai/browserTranscribe"
-          );
-          const real = await transcribeInBrowser(media.mediaId, setSttMsg);
-          s.setTranscript(real);
-          s.setTranscribing(false);
-          setSttMsg("");
-          void detectClips(real);
-          return;
-        } catch (bErr) {
-          console.error("[browser STT]", bErr);
-          setSttMsg("");
-          // fall back to the placeholder transcript below
-        }
-      }
-
       s.setTranscript(serverTranscript);
       s.setTranscribing(false);
+
+      // Clips come from audio + motion signals, so they land in seconds
+      // instead of waiting on speech-to-text.
       void detectClips(serverTranscript);
+
+      // If the server could only give a placeholder (no key / no local
+      // engine), transcribe for real IN THE BROWSER — free, no account. This
+      // runs in the background: words stream into the transcript panel as
+      // each block finishes, and clips are re-scored once real words exist.
+      if (allowBrowserStt && serverTranscript.source !== "whisper") {
+        void (async () => {
+          try {
+            const { transcribeInBrowser } = await import(
+              "@/services/ai/browserTranscribe"
+            );
+            const real = await transcribeInBrowser(
+              media.mediaId,
+              setSttMsg,
+              undefined,
+              (partial) => store.getState().setTranscript(partial),
+            );
+            store.getState().setTranscript(real);
+            setSttMsg("");
+            void detectClips(real);
+          } catch (bErr) {
+            console.error("[browser STT]", bErr);
+            setSttMsg(
+              "Speech-to-text unavailable in this browser — clips still work from audio/motion.",
+            );
+          }
+        })();
+      }
     } catch (err) {
       s.setTranscribing(false);
       setSttMsg("");
@@ -262,27 +272,57 @@ export default function SourcePanel() {
   async function detectClips(t?: Transcript) {
     const s = store.getState();
     const tr = t ?? s.transcript;
-    if (!tr) return;
+    const media = s.source;
+    // No transcript is fine — the signal engine works on audio + motion. With
+    // neither a transcript nor a media source there is nothing to analyze.
+    if (!tr && !media?.mediaId) return;
     s.setDetectingClips(true);
 
-    // Best-effort: pull the decoded waveform so loud/hype moments feed the
-    // scoring formula (helps stream/gaming clips with no textual hook).
+    // Pull the decoded waveform (acoustic signals) and scene cuts (visual
+    // signals). Both are best-effort: whichever arrives feeds the scorer.
     let audio: { peaks?: number[]; peaksDuration?: number } | undefined;
-    if (s.source?.mediaId && s.source.duration) {
-      try {
-        const wf = await fetch(`/api/media/${s.source.mediaId}/waveform`);
-        if (wf.ok) {
-          const wb = await wf.json();
-          if (Array.isArray(wb.peaks) && wb.peaks.length) {
-            audio = { peaks: wb.peaks, peaksDuration: s.source.duration };
-          }
+    let cuts: number[] | undefined;
+    if (media?.mediaId && media.duration) {
+      const [wfRes, scRes] = await Promise.allSettled([
+        fetch(`/api/media/${media.mediaId}/waveform`),
+        fetch(`/api/media/${media.mediaId}/scenes`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ start: 0, end: media.duration, threshold: 0.4 }),
+        }),
+      ]);
+      if (wfRes.status === "fulfilled" && wfRes.value.ok) {
+        const wb = await wfRes.value.json().catch(() => ({}));
+        if (Array.isArray(wb.peaks) && wb.peaks.length) {
+          audio = { peaks: wb.peaks, peaksDuration: media.duration };
         }
-      } catch {
-        /* no waveform — scoring falls back to text-only */
+      }
+      if (scRes.status === "fulfilled" && scRes.value.ok) {
+        const sb = await scRes.value.json().catch(() => ({}));
+        // The route returns clip-relative times; start was 0 so they're absolute.
+        if (Array.isArray(sb.cuts) && sb.cuts.length) cuts = sb.cuts as number[];
       }
     }
 
+    const localInputs = {
+      peaks: audio?.peaks,
+      peaksDuration: audio?.peaksDuration,
+      cuts,
+      duration: media?.duration,
+    };
+
+    const publish = (clips: ClipCandidate[]) => {
+      s.setClips(clips);
+      if (clips.length > 0) {
+        s.selectClip(clips[0].id);
+        s.setGalleryOpen(true); // show the ranked results grid
+      }
+    };
+
     try {
+      // The server route only helps when it has real words to re-rank; with a
+      // placeholder transcript it would score fictional timings.
+      if (!tr || tr.source !== "whisper") throw new Error("no real transcript");
       const body = await readJsonOrThrow(
         await fetch("/api/clips/detect", {
           method: "POST",
@@ -294,22 +334,11 @@ export default function SourcePanel() {
           }),
         }),
       );
-      s.setClips(body.clips as ClipCandidate[]);
-      if (body.clips.length > 0) {
-        s.selectClip(body.clips[0].id);
-        s.setGalleryOpen(true); // show the ranked results grid
-      }
+      publish(body.clips as ClipCandidate[]);
     } catch {
-      // Server route unavailable — heuristics run identically client-side.
-      const clips = findClips(tr, s.clipFinderSettings, {
-        peaks: audio?.peaks,
-        peaksDuration: audio?.peaksDuration,
-      });
-      s.setClips(clips);
-      if (clips.length > 0) {
-        s.selectClip(clips[0].id);
-        s.setGalleryOpen(true);
-      }
+      // Heuristics run identically client-side, and the signal engine needs
+      // no transcript at all.
+      publish(findClips(tr, s.clipFinderSettings, localInputs));
     } finally {
       s.setDetectingClips(false);
     }
@@ -452,7 +481,12 @@ export default function SourcePanel() {
             min={1}
             max={600}
             onCommit={(n) =>
-              store.getState().setClipFinderSettings({ minDuration: n })
+              // Keep the range valid: pushing Min past Max drags Max along,
+              // otherwise the finder silently returns nothing.
+              store.getState().setClipFinderSettings({
+                minDuration: n,
+                ...(n > settings.maxDuration ? { maxDuration: n } : {}),
+              })
             }
           />
           <NumField
@@ -461,7 +495,10 @@ export default function SourcePanel() {
             min={2}
             max={600}
             onCommit={(n) =>
-              store.getState().setClipFinderSettings({ maxDuration: n })
+              store.getState().setClipFinderSettings({
+                maxDuration: n,
+                ...(n < settings.minDuration ? { minDuration: n } : {}),
+              })
             }
           />
           <NumField
@@ -478,10 +515,18 @@ export default function SourcePanel() {
         <button
           className="btn-primary w-full"
           onClick={() => void detectClips()}
-          disabled={!transcript || detecting}
+          // Works with no transcript at all — the audio/visual signal engine
+          // finds highlights from loudness and scene cuts alone.
+          disabled={!source || detecting}
         >
           {detecting ? "Analyzing…" : "✦ Find Viral Clips"}
         </button>
+        {!transcript && source && (
+          <p className="mt-1.5 text-[10px] leading-relaxed text-slate-500">
+            No transcript yet — clips will be found from audio energy and scene
+            cuts, which works well on gameplay and IRL footage.
+          </p>
+        )}
 
         <div className="mt-2.5 flex flex-col gap-1.5">
           {clips.map((clip) => (

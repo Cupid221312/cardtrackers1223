@@ -10,6 +10,7 @@ import {
   rateClip,
   sceneAnalysis,
 } from "@/services/ai/rating";
+import { findClipsFromSignals } from "@/services/ai/signalClipFinder";
 
 /**
  * Heuristic viral-moment detector. Scores every transcript segment on
@@ -29,6 +30,10 @@ export interface ClipFinderInputs {
   peaks?: number[];
   /** Total seconds the peaks span (source duration). */
   peaksDuration?: number;
+  /** Absolute scene-cut timestamps, for the visual signal family. */
+  cuts?: number[];
+  /** Source duration — required for transcript-free signal detection. */
+  duration?: number;
 }
 
 /** Max normalized (0..1) audio energy in a [start,end) window. */
@@ -144,12 +149,28 @@ function makeTitle(segment: TranscriptSegment): string {
 }
 
 export function findClips(
-  transcript: Transcript,
+  transcript: Transcript | null,
   settings: ClipFinderSettings,
   inputs: ClipFinderInputs = {},
 ): ClipCandidate[] {
-  const { segments } = transcript;
-  if (segments.length === 0) return [];
+  const segments = transcript?.segments ?? [];
+
+  // A placeholder transcript describes a *different* video, so its segment
+  // timings are fiction — scoring them would return clips pointing at the
+  // wrong moments. Whenever we don't have real words, fall back to the
+  // audio/visual signal engine, which needs no speech at all.
+  const wordsAreReal = transcript?.source === "whisper" && segments.length > 0;
+  if (!wordsAreReal) {
+    return findClipsFromSignals(
+      {
+        duration: inputs.duration ?? inputs.peaksDuration ?? 0,
+        peaks: inputs.peaks,
+        peaksDuration: inputs.peaksDuration,
+        cuts: inputs.cuts,
+      },
+      settings,
+    );
+  }
 
   const peaks = inputs.peaks;
   const peaksDuration = inputs.peaksDuration;
@@ -218,6 +239,26 @@ export function findClips(
           : "Continuous high-energy speech",
       sceneAnalysis: sceneAnalysis(segments, win.start, win.end),
       keywords: extractKeywords(clipText),
+      signals: [
+        {
+          family: "language",
+          label: "Spoken hooks",
+          strength: Math.min(100, Math.round(win.score * 2.2)),
+          detail:
+            uniqueLabels.length > 0
+              ? uniqueLabels.slice(0, 3).join(", ")
+              : "No strong phrase hooks in this window",
+        },
+        {
+          family: "acoustic",
+          label: "Audio energy",
+          strength: Math.round(clipEnergy * 100),
+          detail:
+            clipEnergy > 0.55
+              ? "Loud moment — cheering, laughter, or emphasis"
+              : "Steady speaking volume",
+        },
+      ],
     });
   }
 

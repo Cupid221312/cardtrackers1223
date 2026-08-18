@@ -63,6 +63,22 @@ export interface ClipRating {
 
 export type LetterGrade = "A+" | "A" | "A-" | "B+" | "B" | "B-" | "C+" | "C" | "D";
 
+/**
+ * One contributing signal behind a clip's score, for the "Why this clip"
+ * panel. Creators trust a score they can see the reasoning behind — and they
+ * learn what makes their content pop, which is what makes the tool sticky.
+ */
+export interface ClipSignal {
+  /** Which signal family this came from (roadmap §4 A–E). */
+  family: "language" | "acoustic" | "visual" | "chat" | "metadata";
+  /** Short human label, e.g. "Audio energy" or "Scene cuts". */
+  label: string;
+  /** 0..100 — how strongly this signal fired for this window. */
+  strength: number;
+  /** Plain-English detail, e.g. "3.2x louder than this stream's average". */
+  detail: string;
+}
+
 export interface ClipCandidate {
   id: string;
   /** Punchy title used for the hook banner. */
@@ -79,6 +95,8 @@ export interface ClipCandidate {
   sceneAnalysis: string;
   /** Detected keyword tags for search/filtering. */
   keywords: string[];
+  /** Per-signal breakdown powering the "Why this clip" panel. */
+  signals?: ClipSignal[];
 }
 
 export interface ClipFinderSettings {

@@ -88,6 +88,10 @@ export default function InspectorPanel() {
   const clip = useSelectedClip();
   const keyframes = useSelectedClipKeyframes();
   const currentTime = useEditorStore((s) => s.currentTime);
+  // Graphics anchor to the selected clip when there is one, otherwise to the
+  // playhead — so dropping an overlay works before any clip is detected
+  // instead of silently doing nothing.
+  const overlayAnchor = clip ? clip.start : currentTime;
   const source = useEditorStore((s) => s.source);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const musicInputRef = useRef<HTMLInputElement>(null);
@@ -514,6 +518,14 @@ export default function InspectorPanel() {
           )}
         </div>
 
+        {!clip && (
+          <p className="mt-2.5 rounded-md border border-ink-600 bg-ink-900 p-2 text-[10px] leading-relaxed text-slate-400">
+            Motion tracking and auto-zoom work on a selected clip. Run{" "}
+            <b className="text-slate-300">Find Viral Clips</b> (or add one with{" "}
+            <b className="text-slate-300">+ Clip</b> on the timeline) to enable
+            them.
+          </p>
+        )}
         <button
           className="btn-ghost mt-2.5 w-full !py-1.5 text-xs"
           onClick={autoReframe}
@@ -960,7 +972,6 @@ export default function InspectorPanel() {
         <div className="grid grid-cols-2 gap-1.5">
           <button
             onClick={() => {
-              if (!clip) return;
               st().addOverlay({
                 id: `ov-${Date.now()}`,
                 kind: "notification",
@@ -971,8 +982,8 @@ export default function InspectorPanel() {
                 scale: 0.15,
                 color: "#ff0000",
                 rotation: 0,
-                start: clip.start,
-                end: clip.start + 2,
+                start: overlayAnchor,
+                end: overlayAnchor + 2,
               });
             }}
             className="btn-ghost !py-1.5 text-[10px]"
@@ -981,7 +992,6 @@ export default function InspectorPanel() {
           </button>
           <button
             onClick={() => {
-              if (!clip) return;
               st().addOverlay({
                 id: `ov-${Date.now()}`,
                 kind: "subscribe",
@@ -992,8 +1002,8 @@ export default function InspectorPanel() {
                 scale: 0.12,
                 color: "#ff0000",
                 rotation: 0,
-                start: clip.start,
-                end: clip.start + 2,
+                start: overlayAnchor,
+                end: overlayAnchor + 2,
               });
             }}
             className="btn-ghost !py-1.5 text-[10px]"
@@ -1002,7 +1012,6 @@ export default function InspectorPanel() {
           </button>
           <button
             onClick={() => {
-              if (!clip) return;
               st().addOverlay({
                 id: `ov-${Date.now()}`,
                 kind: "emoji",
@@ -1013,8 +1022,8 @@ export default function InspectorPanel() {
                 scale: 0.1,
                 color: "",
                 rotation: 0,
-                start: clip.start,
-                end: clip.start + 1.5,
+                start: overlayAnchor,
+                end: overlayAnchor + 1.5,
               });
             }}
             className="btn-ghost !py-1.5 text-[10px]"
@@ -1023,7 +1032,6 @@ export default function InspectorPanel() {
           </button>
           <button
             onClick={() => {
-              if (!clip) return;
               st().addOverlay({
                 id: `ov-${Date.now()}`,
                 kind: "arrow",
@@ -1034,8 +1042,8 @@ export default function InspectorPanel() {
                 scale: 0.1,
                 color: "#ffd400",
                 rotation: 0,
-                start: clip.start,
-                end: clip.start + 2,
+                start: overlayAnchor,
+                end: overlayAnchor + 2,
               });
             }}
             className="btn-ghost !py-1.5 text-[10px]"

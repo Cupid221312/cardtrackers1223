@@ -25,7 +25,11 @@ function makeTranscript(sentences: string[], secondsEach = 8): Transcript {
       wordIds: ids,
     });
   });
-  return { words, segments, language: "en", source: "mock" };
+  // Marked "whisper" because these fixtures stand in for a *real* transcript:
+  // findClips deliberately ignores "mock" transcripts (the server's demo
+  // placeholder describes a different video, so its timings are fiction) and
+  // scores from audio/visual signals instead.
+  return { words, segments, language: "en", source: "whisper" };
 }
 
 const HOOKY = [

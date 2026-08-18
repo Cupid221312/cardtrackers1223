@@ -27,7 +27,7 @@ function tileCountFor(duration: number): number {
  * across the source (count scales with duration) tiled into one cached JPEG.
  */
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: { id: string } },
 ) {
   if (!isValidMediaId(params.id)) {
@@ -40,12 +40,20 @@ export async function GET(
 
   await ensureMediaDirs();
 
+  // The timeline asks for exactly as many frames as fit across the strip at
+  // the current zoom, so the sprite can be drawn 1:1 without stretching each
+  // frame. Falls back to a duration-derived count for other callers.
   let tiles = 60;
-  try {
-    const { duration } = await probeMedia(mediaPath);
-    if (duration && duration > 0) tiles = tileCountFor(duration);
-  } catch {
-    /* fall back to default tile count */
+  const requested = Number(new URL(req.url).searchParams.get("tiles"));
+  if (Number.isFinite(requested) && requested >= 8) {
+    tiles = Math.min(600, Math.round(requested));
+  } else {
+    try {
+      const { duration } = await probeMedia(mediaPath);
+      if (duration && duration > 0) tiles = tileCountFor(duration);
+    } catch {
+      /* fall back to default tile count */
+    }
   }
   // Tile count is baked into the cache name so changing it re-renders.
   const cachePath = path.join(CACHE_DIR, `${params.id}.thumbs${tiles}.jpg`);
