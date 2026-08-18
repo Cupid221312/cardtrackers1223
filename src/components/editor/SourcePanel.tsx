@@ -253,8 +253,11 @@ export default function SourcePanel() {
             void detectClips(real);
           } catch (bErr) {
             console.error("[browser STT]", bErr);
+            // Say which step failed; "it didn't work" is not actionable.
             setSttMsg(
-              "Speech-to-text unavailable in this browser — clips still work from audio/motion.",
+              bErr instanceof Error
+                ? bErr.message
+                : "Speech-to-text failed — clips still work from audio/motion.",
             );
           }
         })();
@@ -407,9 +410,19 @@ export default function SourcePanel() {
           </p>
         )}
         {sttMsg && (
-          <p className="mt-2 rounded-lg border border-accent/30 bg-accent/10 px-2.5 py-1.5 text-xs text-accent-glow">
-            {sttMsg}
-          </p>
+          <div className="mt-2 rounded-lg border border-accent/30 bg-accent/10 px-2.5 py-1.5 text-xs text-accent-glow">
+            <p className="leading-relaxed">{sttMsg}</p>
+            {/* A progress line ends in "…"; anything else is a failure the
+                user may want to retry without re-importing the video. */}
+            {!sttMsg.endsWith("…") && source && (
+              <button
+                className="mt-1.5 underline underline-offset-2 hover:no-underline"
+                onClick={() => void transcribe(source)}
+              >
+                Retry transcription
+              </button>
+            )}
+          </div>
         )}
         {source && (
           <div className="mt-2.5 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-2 text-xs">

@@ -19,32 +19,91 @@ type AsrPipeline = (input: Float32Array, opts: Record<string, any>) => Promise<{
 
 let cachedPipeline: AsrPipeline | null = null;
 
-const CDN =
+/**
+ * The library ships with the app, so loading it needs no third-party host.
+ * The CDN stays as a fallback in case the vendored copy is missing.
+ */
+const LOCAL_LIB = "/vendor/transformers.min.js";
+const CDN_LIB =
   "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2/dist/transformers.min.js";
+
+/**
+ * Which step failed, so the UI can say something more useful than "it didn't
+ * work". Each stage fails for a different reason and has a different fix.
+ */
+export type SttStage = "library" | "model" | "audio" | "inference";
+
+export class SttError extends Error {
+  constructor(
+    readonly stage: SttStage,
+    message: string,
+    readonly cause?: unknown,
+  ) {
+    super(message);
+    this.name = "SttError";
+  }
+}
+
+async function loadLibrary(): Promise<any> {
+  const attempts: Array<[string, string]> = [
+    [LOCAL_LIB, "bundled copy"],
+    [CDN_LIB, "CDN"],
+  ];
+  const failures: string[] = [];
+  for (const [url, label] of attempts) {
+    try {
+      return await import(/* webpackIgnore: true */ url as string);
+    } catch (err) {
+      failures.push(`${label}: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+  throw new SttError(
+    "library",
+    `Could not load the speech-to-text library (${failures.join("; ")})`,
+  );
+}
 
 async function loadPipeline(
   model: string,
   onProgress: (msg: string) => void,
 ): Promise<AsrPipeline> {
   if (cachedPipeline) return cachedPipeline;
-  onProgress("Loading speech model (first time downloads ~40MB)…");
-  const tf: any = await import(/* webpackIgnore: true */ CDN as string);
+  onProgress("Loading speech engine…");
+  const tf = await loadLibrary();
   tf.env.allowLocalModels = false;
-  const pipe = await tf.pipeline("automatic-speech-recognition", model, {
-    progress_callback: (p: any) => {
-      if (p?.status === "progress" && p?.file && typeof p.progress === "number") {
-        onProgress(`Downloading model: ${Math.round(p.progress)}%`);
-      }
-    },
-  });
-  cachedPipeline = pipe as AsrPipeline;
-  return cachedPipeline;
+
+  onProgress("Downloading speech model (~40MB, first time only)…");
+  try {
+    const pipe = await tf.pipeline("automatic-speech-recognition", model, {
+      progress_callback: (p: any) => {
+        if (p?.status === "progress" && p?.file && typeof p.progress === "number") {
+          onProgress(`Downloading model: ${Math.round(p.progress)}%`);
+        }
+      },
+    });
+    cachedPipeline = pipe as AsrPipeline;
+    return cachedPipeline;
+  } catch (err) {
+    throw new SttError(
+      "model",
+      `Could not download the speech model from huggingface.co — ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+      err,
+    );
+  }
 }
 
 /** Fetch the 16 kHz WAV and decode it to a mono Float32Array at 16 kHz. */
 async function decodeAudio(mediaId: string): Promise<Float32Array> {
   const res = await fetch(`/api/media/${mediaId}/audio`);
-  if (!res.ok) throw new Error("could not fetch audio for transcription");
+  if (!res.ok) {
+    throw new SttError(
+      "audio",
+      `The server could not extract audio from this file (HTTP ${res.status}). ` +
+        `Check that ffmpeg is working.`,
+    );
+  }
   const arr = await res.arrayBuffer();
   const AC: typeof AudioContext =
     (window as any).AudioContext || (window as any).webkitAudioContext;
@@ -126,11 +185,21 @@ export async function transcribeInBrowser(
     const pct = Math.round((offsetSeconds / totalSeconds) * 100);
     onProgress(`Transcribing… ${pct}% (${b + 1}/${blockCount})`);
 
-    const out = await pipe(block, {
-      return_timestamps: "word",
-      chunk_length_s: 30,
-      stride_length_s: 5,
-    });
+    let out;
+    try {
+      out = await pipe(block, {
+        return_timestamps: "word",
+        chunk_length_s: 30,
+        stride_length_s: 5,
+      });
+    } catch (err) {
+      throw new SttError(
+        "inference",
+        `Speech recognition failed ${Math.round(offsetSeconds)}s into the ` +
+          `video — ${err instanceof Error ? err.message : String(err)}`,
+        err,
+      );
+    }
 
     const chunks = out.chunks ?? [];
     for (let i = 0; i < chunks.length; i++) {
