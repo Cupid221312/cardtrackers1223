@@ -92,6 +92,23 @@ export default function SourcePanel() {
       .catch(() => undefined);
   }, []);
 
+  // Links shared into the installed app (manifest share_target) arrive as
+  // ?shared=… — pick the URL out and start the import without the user having
+  // to paste anything. Share sheets often send "Title — https://…", so pull
+  // the first URL out of whatever text arrives.
+  useEffect(() => {
+    const shared = new URLSearchParams(window.location.search).get("shared");
+    if (!shared) return;
+    const url = shared.match(/https?:\/\/\S+/)?.[0];
+    // Clear the query so a refresh doesn't re-import the same link.
+    window.history.replaceState({}, "", window.location.pathname);
+    if (!url) return;
+    setLinkUrl(url);
+    void importUrl(url);
+    // Runs once on mount; importUrl reads live state from the store.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ---- ingestion ----------------------------------------------------------
 
   async function handleUpload(file: File) {
@@ -128,16 +145,22 @@ export default function SourcePanel() {
     }
   }
 
-  async function handleUrlImport() {
+  function handleUrlImport() {
+    return importUrl(linkUrl.trim());
+  }
+
+  /** Import a link, whether typed in or shared into the installed app. */
+  async function importUrl(rawUrl: string) {
     const s = store.getState();
-    if (!linkUrl.trim()) return;
+    const url = rawUrl.trim();
+    if (!url) return;
     s.setIngesting(true);
     try {
       const body = await readJsonOrThrow(
         await fetch("/api/ingest/url", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: linkUrl.trim() }),
+          body: JSON.stringify({ url }),
         }),
       );
       const media: SourceMedia = {

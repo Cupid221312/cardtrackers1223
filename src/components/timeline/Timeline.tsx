@@ -144,13 +144,13 @@ export default function Timeline() {
             {detectingScenes ? "Detecting…" : "⧉ Split at scenes"}
           </button>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] uppercase tracking-wider text-slate-600">
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="hidden text-[10px] uppercase tracking-wider text-slate-600 sm:inline">
             Zoom
           </span>
           <input
             type="range"
-            className="slider !w-28"
+            className="slider !w-16 sm:!w-28"
             min={2}
             max={80}
             step={1}
@@ -191,8 +191,13 @@ export default function Timeline() {
             </div>
           )}
         </div>
+        {/* Centred over the tracks, not the whole row — the label column sits
+            on top and would otherwise clip the first characters. */}
         {!source && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs text-slate-600">
+          <div
+            className="pointer-events-none absolute inset-y-0 right-0 flex items-center justify-center px-3 text-center text-xs text-slate-600"
+            style={{ left: TRACK_LABEL_WIDTH }}
+          >
             The timeline lights up once media is imported.
           </div>
         )}

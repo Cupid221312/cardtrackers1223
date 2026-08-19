@@ -424,7 +424,13 @@ function EmptyCanvas() {
       </div>
       <div className="px-6">
         <p className="text-sm font-semibold text-slate-300">No media loaded</p>
-        <p className="mt-1 text-xs leading-relaxed text-slate-500">
+        {/* The panel is a column on desktop and a bottom sheet on a phone, so
+            point at whichever the reader is actually looking at. */}
+        <p className="mt-1 text-xs leading-relaxed text-slate-500 lg:hidden">
+          Tap <b className="text-slate-400">Import &amp; Clips</b> below to add a
+          YouTube link, a Twitch VOD, or an MP4.
+        </p>
+        <p className="mt-1 hidden text-xs leading-relaxed text-slate-500 lg:block">
           Import a YouTube link or upload an MP4 in the left panel to start
           clipping.
         </p>

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useStore } from "zustand";
+import BottomSheet from "@/components/ui/BottomSheet";
 import SourcePanel from "@/components/editor/SourcePanel";
 import PreviewCanvas from "@/components/editor/PreviewCanvas";
 import InspectorPanel from "@/components/editor/InspectorPanel";
@@ -22,6 +23,9 @@ export default function StudioShell() {
   }, []);
   useProjectAutosave();
 
+  /** Which panel is showing as a bottom sheet on small screens. */
+  const [sheet, setSheet] = useState<"source" | "style" | null>(null);
+
   const setExportModalOpen = useEditorStore((s) => s.setExportModalOpen);
   const setGalleryOpen = useEditorStore((s) => s.setGalleryOpen);
   const clipCount = useEditorStore((s) => s.clips.length);
@@ -36,8 +40,8 @@ export default function StudioShell() {
   return (
     <div className="flex h-full flex-col bg-ink-950">
       {/* ---- top bar ------------------------------------------------------ */}
-      <header className="flex h-12 shrink-0 items-center justify-between border-b border-ink-700 bg-ink-900 px-4">
-        <div className="flex items-center gap-2.5">
+      <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-ink-700 bg-ink-900 px-2 lg:px-4">
+        <div className="flex min-w-0 items-center gap-2.5">
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white">
             <svg viewBox="0 0 24 24" className="h-4 w-4 fill-ink-950">
               <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v13a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5v-13Zm6 3.6v5.8a.6.6 0 0 0 .92.5l4.55-2.9a.6.6 0 0 0 0-1l-4.55-2.9a.6.6 0 0 0-.92.5Z" />
@@ -46,7 +50,7 @@ export default function StudioShell() {
           <span className="text-base font-black tracking-tight text-white">
             Clip
           </span>
-          <nav className="ml-3 flex items-center gap-1 text-xs">
+          <nav className="ml-3 hidden items-center gap-1 text-xs sm:flex">
             <Link
               href="/dashboard"
               className="rounded-md px-2 py-1 font-medium text-slate-400 transition hover:bg-ink-700 hover:text-white"
@@ -61,7 +65,7 @@ export default function StudioShell() {
             </Link>
           </nav>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1.5">
           <button
             className="btn-ghost !px-2.5 !py-1.5"
             onClick={undoEdit}
@@ -93,7 +97,7 @@ export default function StudioShell() {
               <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current">
                 <path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 0h7v7h-7v-7Z" />
               </svg>
-              Clips
+              <span className="hidden sm:inline">Clips</span>
               <span className="rounded-full bg-accent/20 px-1.5 text-[10px] font-bold text-accent-glow">
                 {clipCount}
               </span>
@@ -107,7 +111,7 @@ export default function StudioShell() {
           <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current">
             <path d="M12 3a1 1 0 0 1 1 1v9.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-5 5a1 1 0 0 1-1.4 0l-5-5a1 1 0 1 1 1.4-1.4l3.3 3.3V4a1 1 0 0 1 1-1Zm-7 15a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H6a1 1 0 0 1-1-1Z" />
           </svg>
-          Export
+          <span className="hidden sm:inline">Export</span>
           {activeJobs > 0 && (
             <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-yellow px-1 text-[10px] font-bold text-black">
               {activeJobs}
@@ -118,24 +122,63 @@ export default function StudioShell() {
       </header>
 
       {/* ---- main workspace ---------------------------------------------- */}
+      {/* Below lg the side columns become bottom sheets so the preview keeps
+          the whole screen — a 300px column on a phone leaves nothing for the
+          thing being edited. */}
       <div className="flex min-h-0 flex-1">
-        <aside className="w-[300px] shrink-0 overflow-y-auto border-r border-ink-700 bg-ink-900 p-3">
+        <aside className="hidden w-[300px] shrink-0 overflow-y-auto border-r border-ink-700 bg-ink-900 p-3 lg:block">
           <SourcePanel />
         </aside>
 
-        <main className="flex min-w-0 flex-1 items-center justify-center bg-ink-950 p-4">
+        <main className="flex min-w-0 flex-1 items-center justify-center bg-ink-950 p-2 lg:p-4">
           <PreviewCanvas />
         </main>
 
-        <aside className="w-[300px] shrink-0 overflow-y-auto border-l border-ink-700 bg-ink-900 p-3">
+        <aside className="hidden w-[300px] shrink-0 overflow-y-auto border-l border-ink-700 bg-ink-900 p-3 lg:block">
           <InspectorPanel />
         </aside>
       </div>
 
       {/* ---- timeline ----------------------------------------------------- */}
-      <footer className="h-[220px] shrink-0 border-t border-ink-700 bg-ink-900">
+      <footer className="h-[150px] shrink-0 border-t border-ink-700 bg-ink-900 lg:h-[220px]">
         <Timeline />
       </footer>
+
+      {/* ---- mobile tab bar + sheets -------------------------------------- */}
+      <nav
+        className="flex shrink-0 items-stretch gap-2 border-t border-ink-700 bg-ink-900 px-3 py-2 lg:hidden"
+        style={{ paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))" }}
+      >
+        <button
+          className="btn-ghost flex-1 !py-2 text-xs"
+          onClick={() => setSheet(sheet === "source" ? null : "source")}
+          aria-expanded={sheet === "source"}
+        >
+          Import &amp; Clips
+        </button>
+        <button
+          className="btn-ghost flex-1 !py-2 text-xs"
+          onClick={() => setSheet(sheet === "style" ? null : "style")}
+          aria-expanded={sheet === "style"}
+        >
+          Style &amp; Tools
+        </button>
+      </nav>
+
+      <BottomSheet
+        open={sheet === "source"}
+        title="Import & Clips"
+        onClose={() => setSheet(null)}
+      >
+        <SourcePanel />
+      </BottomSheet>
+      <BottomSheet
+        open={sheet === "style"}
+        title="Style & Tools"
+        onClose={() => setSheet(null)}
+      >
+        <InspectorPanel />
+      </BottomSheet>
 
       <ExportQueueModal />
       <ClipDetailModal />
