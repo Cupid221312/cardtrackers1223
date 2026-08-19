@@ -142,6 +142,27 @@ describe("findClips routing", () => {
     expect(clips.some((c) => c.start > 60)).toBe(true);
   });
 
+  it("trusts a non-whisper transcript that covers the whole source", () => {
+    // The bundled demo footage ships with a transcript that really does match
+    // it, so its words should drive scoring rather than being discarded.
+    const aligned: Transcript = {
+      source: "mock",
+      language: "en",
+      words: [{ id: "w0", text: "secret", start: 0, end: 1 }],
+      segments: Array.from({ length: 10 }, (_, i) => ({
+        id: `s${i}`,
+        text: "here's why nobody tells you the secret",
+        start: i * 9,
+        end: i * 9 + 9,
+        wordIds: ["w0"],
+      })),
+    };
+    const clips = findClips(aligned, settings, { duration: 90 });
+    expect(clips.length).toBeGreaterThan(0);
+    // Text-scored clips carry phrase titles, not the signal engine's label.
+    expect(clips.every((c) => !c.title.startsWith("HIGH ENERGY"))).toBe(true);
+  });
+
   it("still produces clips when the transcript is null", () => {
     const clips = findClips(null, settings, {
       duration: 600,

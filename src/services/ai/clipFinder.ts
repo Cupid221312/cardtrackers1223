@@ -164,7 +164,17 @@ export function findClips(
   // timings are fiction — scoring them would return clips pointing at the
   // wrong moments. Whenever we don't have real words, fall back to the
   // audio/visual signal engine, which needs no speech at all.
-  const wordsAreReal = transcript?.source === "whisper" && segments.length > 0;
+  //
+  // Coverage tells the two cases apart: the bundled demo footage ships with a
+  // transcript that genuinely matches it end to end, while the same demo text
+  // dropped on a real upload covers only its first minute.
+  const sourceDuration = inputs.duration ?? inputs.peaksDuration ?? 0;
+  const transcriptEnd = segments.length ? segments[segments.length - 1].end : 0;
+  const coversSource =
+    sourceDuration > 0 && transcriptEnd / sourceDuration >= 0.6;
+  const wordsAreReal =
+    segments.length > 0 &&
+    (transcript?.source === "whisper" || coversSource);
   if (!wordsAreReal) {
     return findClipsFromSignals(
       {
