@@ -4,11 +4,13 @@ import os from "os";
 import { spawn } from "child_process";
 import ytdl from "@distube/ytdl-core";
 import {
+  CACHE_DIR,
   UPLOAD_DIR,
   ensureMediaDirs,
   newMediaId,
   probeMedia,
 } from "@/lib/server/media";
+import { fetchChatForUrl } from "@/lib/server/twitchChat";
 
 /**
  * URL ingest for YouTube, Twitch VODs/clips, and Kick VODs/clips.
@@ -30,6 +32,30 @@ export interface IngestResult {
   width: number;
   height: number;
   platform: IngestPlatform;
+  /** Chat replay messages retrieved, when the platform provides them. */
+  chatMessages?: number;
+}
+
+/** Where a media id's cached chat replay lives. */
+export function chatPathFor(mediaId: string): string {
+  return path.join(CACHE_DIR, `${mediaId}.chat.json`);
+}
+
+/**
+ * Pull and cache chat replay for a source URL. Returns how many messages were
+ * stored; 0 means the platform has no retrievable chat or the fetch failed,
+ * neither of which should block an import.
+ */
+async function saveChatForMedia(mediaId: string, url: string): Promise<number> {
+  try {
+    const messages = await fetchChatForUrl(url);
+    if (messages.length === 0) return 0;
+    await fs.writeFile(chatPathFor(mediaId), JSON.stringify(messages));
+    return messages.length;
+  } catch (err) {
+    console.error("[ingest] chat fetch failed:", err);
+    return 0;
+  }
 }
 
 /**
@@ -89,6 +115,10 @@ export async function ingestFromUrl(url: string): Promise<IngestResult> {
 
   try {
     const probe = await probeMedia(filePath);
+    // Chat replay is the strongest highlight signal on a stream, so pull it
+    // alongside the video. Best-effort: detection falls back to audio and
+    // motion when it is unavailable.
+    const chatCount = await saveChatForMedia(id, url);
     return {
       mediaId: id,
       title: title || `${PLATFORM_LABEL[platform]} import`,
@@ -96,6 +126,7 @@ export async function ingestFromUrl(url: string): Promise<IngestResult> {
       width: probe.width,
       height: probe.height,
       platform,
+      chatMessages: chatCount,
     };
   } catch (err) {
     await fs.unlink(filePath).catch(() => undefined);

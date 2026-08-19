@@ -4,6 +4,7 @@ import type {
   ClipSignal,
 } from "@/lib/types";
 import { overallScore, toGrade } from "@/services/ai/rating";
+import { scoreChatWindows, type ChatMessage } from "@/services/ai/chatSignals";
 
 /**
  * Transcript-free viral-moment detection (roadmap §4, signal families B + C).
@@ -28,6 +29,8 @@ export interface SignalInputs {
   peaksDuration?: number;
   /** Absolute scene-cut timestamps in seconds. */
   cuts?: number[];
+  /** Time-aligned stream chat, when the source is a Twitch/Kick VOD. */
+  chat?: ChatMessage[];
 }
 
 interface Window {
@@ -151,7 +154,8 @@ export function findClipsFromSignals(
 
   const hasAudio = Boolean(inputs.peaks && inputs.peaks.length > 4);
   const hasCuts = Boolean(inputs.cuts && inputs.cuts.length > 0);
-  if (!hasAudio && !hasCuts) return [];
+  const hasChat = Boolean(inputs.chat && inputs.chat.length > 10);
+  if (!hasAudio && !hasCuts && !hasChat) return [];
 
   // Roadmap §4: variable window length, ~1/3 overlap between windows.
   const windowLen = Math.min(
@@ -168,20 +172,41 @@ export function findClipsFromSignals(
   const rampStats = stats(windows.map((w) => w.energyRamp));
   const cutStats = stats(windows.map((w) => w.cutRate));
 
-  const scored = windows.map((w) => {
+  // Chat is scored across the same windows so every family shares a scale.
+  const chatScores = hasChat
+    ? scoreChatWindows(inputs.chat!, windows)
+    : windows.map(() => null);
+
+  const scored = windows.map((w, i) => {
     const zPeak = (w.energyPeak - peakStats.mean) / peakStats.sd;
     const zMean = (w.energyMean - meanStats.mean) / meanStats.sd;
     const zRamp = (w.energyRamp - rampStats.mean) / rampStats.sd;
     const zCut = (w.cutRate - cutStats.mean) / cutStats.sd;
+    const chat = chatScores[i];
 
     // Hand-tuned fusion weights. Peak loudness is the strongest single
     // predictor of a highlight on stream footage; cut density is a good
     // secondary for action, and the ramp catches build-ups.
-    const fused = hasAudio
+    const av = hasAudio
       ? 0.45 * zPeak + 0.2 * zMean + 0.15 * zRamp + (hasCuts ? 0.2 * zCut : 0)
-      : zCut;
+      : hasCuts
+        ? zCut
+        : 0;
+
+    // When chat exists it leads. The audience reacted to the moment as it
+    // happened, which beats inferring the moment from the footage — and it
+    // catches highlights the streamer stays quiet through.
+    const fused = chat ? 0.55 * chat.z + 0.45 * av : av;
 
     const signals: ClipSignal[] = [];
+    if (chat) {
+      signals.push({
+        family: "chat",
+        label: "Chat reaction",
+        strength: chat.strength,
+        detail: chat.detail,
+      });
+    }
     if (hasAudio) {
       signals.push({
         family: "acoustic",
@@ -209,7 +234,7 @@ export function findClipsFromSignals(
       });
     }
 
-    return { window: w, fused, zPeak, zRamp, zCut, signals };
+    return { window: w, fused, zPeak, zRamp, zCut, chat, signals };
   });
 
   const ranked = [...scored].sort((a, b) => b.fused - a.fused);
@@ -225,20 +250,28 @@ export function findClipsFromSignals(
     // Map the fused z-score onto a friendly 0..100 band. A z of +2 (a genuine
     // standout for this video) lands near 95; the median window lands near 55.
     const score = Math.round(clamp01((cand.fused + 1.6) / 3.6) * 100);
+    // A crowd reacting is direct evidence the moment landed, so it lifts the
+    // audience-facing axes rather than only the fused total.
+    const chatZ = cand.chat?.z ?? 0;
     const rating = {
-      hook: Math.round(clamp01((cand.zRamp + 1.5) / 3) * 100),
+      hook: Math.round(clamp01((Math.max(cand.zRamp, chatZ) + 1.5) / 3) * 100),
       flow: Math.round(clamp01(0.55 + w.energyMean * 0.4) * 100),
-      value: Math.round(clamp01((cand.zPeak + 1.5) / 3) * 100),
-      trend: Math.round(clamp01((cand.zCut + 1.5) / 3) * 100),
+      value: Math.round(clamp01((Math.max(cand.zPeak, chatZ) + 1.5) / 3) * 100),
+      trend: Math.round(clamp01((Math.max(cand.zCut, chatZ) + 1.5) / 3) * 100),
     };
 
     const top = [...cand.signals].sort((a, b) => b.strength - a.strength)[0];
     const mins = Math.floor(w.start / 60);
     const secs = Math.round(w.start % 60).toString().padStart(2, "0");
+    const calledOut = (cand.chat?.metrics.clipCallouts ?? 0) > 0;
 
     clips.push({
       id: `sig-${clips.length}-${Math.round(w.start * 10)}`,
-      title: `HIGH ENERGY @ ${mins}:${secs}`,
+      title: calledOut
+        ? `CHAT SAID CLIP IT @ ${mins}:${secs}`
+        : chatZ > 0.8
+          ? `CHAT WENT OFF @ ${mins}:${secs}`
+          : `HIGH ENERGY @ ${mins}:${secs}`,
       start: w.start,
       end: w.end,
       score: Math.max(score, overallScore(rating) - 10),
@@ -247,7 +280,9 @@ export function findClipsFromSignals(
         ? `${top.label}: ${top.detail}`
         : "Sustained activity above this video's baseline",
       sceneAnalysis:
-        `Detected from audio and motion signals (no speech required). ` +
+        (cand.chat
+          ? `Detected from chat reaction plus audio and motion. `
+          : `Detected from audio and motion signals (no speech required). `) +
         `Overall grade ${toGrade(score)}. ` +
         cand.signals.map((s) => `${s.label} ${s.strength}/100`).join(" · "),
       keywords: cand.signals.map((s) => s.label.toLowerCase()),

@@ -14,6 +14,7 @@ import {
   findClipsFromSignals,
   normalizeSettings,
 } from "@/services/ai/signalClipFinder";
+import type { ChatMessage } from "@/services/ai/chatSignals";
 
 /**
  * Heuristic viral-moment detector. Scores every transcript segment on
@@ -35,6 +36,8 @@ export interface ClipFinderInputs {
   peaksDuration?: number;
   /** Absolute scene-cut timestamps, for the visual signal family. */
   cuts?: number[];
+  /** Time-aligned stream chat, for the chat signal family. */
+  chat?: ChatMessage[];
   /** Source duration — required for transcript-free signal detection. */
   duration?: number;
 }
@@ -182,6 +185,7 @@ export function findClips(
         peaks: inputs.peaks,
         peaksDuration: inputs.peaksDuration,
         cuts: inputs.cuts,
+        chat: inputs.chat,
       },
       settings,
     );

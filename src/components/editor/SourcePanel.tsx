@@ -12,6 +12,7 @@ import type {
   SourceMedia,
   Transcript,
 } from "@/lib/types";
+import type { ChatMessage } from "@/services/ai/chatSignals";
 import clsx from "clsx";
 
 /**
@@ -285,15 +286,24 @@ export default function SourcePanel() {
     // signals). Both are best-effort: whichever arrives feeds the scorer.
     let audio: { peaks?: number[]; peaksDuration?: number } | undefined;
     let cuts: number[] | undefined;
+    let chat: ChatMessage[] | undefined;
     if (media?.mediaId && media.duration) {
-      const [wfRes, scRes] = await Promise.allSettled([
+      const [wfRes, scRes, chatRes] = await Promise.allSettled([
         fetch(`/api/media/${media.mediaId}/waveform`),
         fetch(`/api/media/${media.mediaId}/scenes`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ start: 0, end: media.duration, threshold: 0.4 }),
         }),
+        // Stream chat, when this came from a Twitch VOD.
+        fetch(`/api/media/${media.mediaId}/chat`),
       ]);
+      if (chatRes.status === "fulfilled" && chatRes.value.ok) {
+        const cb = await chatRes.value.json().catch(() => ({}));
+        if (Array.isArray(cb.messages) && cb.messages.length) {
+          chat = cb.messages as ChatMessage[];
+        }
+      }
       if (wfRes.status === "fulfilled" && wfRes.value.ok) {
         const wb = await wfRes.value.json().catch(() => ({}));
         if (Array.isArray(wb.peaks) && wb.peaks.length) {
@@ -311,6 +321,7 @@ export default function SourcePanel() {
       peaks: audio?.peaks,
       peaksDuration: audio?.peaksDuration,
       cuts,
+      chat,
       duration: media?.duration,
     };
 
@@ -374,6 +385,10 @@ export default function SourcePanel() {
             </svg>
           </button>
         </div>
+        <p className="mt-1.5 text-[10px] leading-relaxed text-slate-600">
+          Clip streams you own the rights to. Twitch VODs also pull chat replay,
+          which is used to rank the moments your audience reacted to.
+        </p>
         <div className="my-2 flex items-center gap-2 text-[10px] uppercase tracking-widest text-slate-600">
           <div className="h-px flex-1 bg-ink-700" /> or <div className="h-px flex-1 bg-ink-700" />
         </div>
