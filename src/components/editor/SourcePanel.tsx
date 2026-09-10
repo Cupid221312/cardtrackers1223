@@ -198,7 +198,10 @@ export default function SourcePanel() {
         duration: body.duration,
         width: body.width,
         height: body.height,
-        origin: "upload",
+        // The demo generator emits the footage and its transcript together, so
+        // this is the one case where a placeholder transcript really does
+        // describe the video.
+        origin: "demo",
       };
       s.setSource(media);
       clearEditHistory();
@@ -305,19 +308,15 @@ export default function SourcePanel() {
     if (!tr && !media?.mediaId) return;
     s.setDetectingClips(true);
 
-    // Pull the decoded waveform (acoustic signals) and scene cuts (visual
-    // signals). Both are best-effort: whichever arrives feeds the scorer.
+    // Waveform and chat are cheap lookups. Scene detection has to decode the
+    // video — roughly ten seconds per minute of 1080p — so waiting on it would
+    // leave a 15-minute VOD showing "Analyzing…" for over a minute. Get clips
+    // on screen from the fast signals, then fold cuts in when they land.
     let audio: { peaks?: number[]; peaksDuration?: number } | undefined;
-    let cuts: number[] | undefined;
     let chat: ChatMessage[] | undefined;
     if (media?.mediaId && media.duration) {
-      const [wfRes, scRes, chatRes] = await Promise.allSettled([
+      const [wfRes, chatRes] = await Promise.allSettled([
         fetch(`/api/media/${media.mediaId}/waveform`),
-        fetch(`/api/media/${media.mediaId}/scenes`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ start: 0, end: media.duration, threshold: 0.4 }),
-        }),
         // Stream chat, when this came from a Twitch VOD.
         fetch(`/api/media/${media.mediaId}/chat`),
       ]);
@@ -333,26 +332,60 @@ export default function SourcePanel() {
           audio = { peaks: wb.peaks, peaksDuration: media.duration };
         }
       }
-      if (scRes.status === "fulfilled" && scRes.value.ok) {
-        const sb = await scRes.value.json().catch(() => ({}));
-        // The route returns clip-relative times; start was 0 so they're absolute.
-        if (Array.isArray(sb.cuts) && sb.cuts.length) cuts = sb.cuts as number[];
-      }
     }
 
     const localInputs = {
       peaks: audio?.peaks,
       peaksDuration: audio?.peaksDuration,
-      cuts,
       chat,
       duration: media?.duration,
+      // Only the demo generator ships a placeholder transcript that actually
+      // lines up with its footage.
+      placeholderMatchesSource: media?.origin === "demo",
     };
+
+    /**
+     * Re-score once scene cuts arrive, but only while the results on screen
+     * are still the ones we just published — if the user has since selected,
+     * trimmed or re-run detection, silently drop the refinement rather than
+     * yanking their work out from under them.
+     */
+    function refineWithScenes(published: ClipCandidate[]) {
+      if (!media?.mediaId || !media.duration) return;
+      void (async () => {
+        try {
+          const res = await fetch(`/api/media/${media.mediaId}/scenes`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              start: 0,
+              end: media.duration,
+              threshold: 0.4,
+            }),
+          });
+          if (!res.ok) return;
+          const sb = await res.json().catch(() => ({}));
+          // start was 0, so the clip-relative times are already absolute.
+          if (!Array.isArray(sb.cuts) || sb.cuts.length === 0) return;
+          const st = store.getState();
+          if (st.clips !== published) return;
+          const refined = findClips(tr, st.clipFinderSettings, {
+            ...localInputs,
+            cuts: sb.cuts as number[],
+          });
+          if (refined.length > 0) st.setClips(refined);
+        } catch {
+          /* cuts are a bonus signal — clips already stand without them */
+        }
+      })();
+    }
 
     const publish = (clips: ClipCandidate[]) => {
       s.setClips(clips);
       if (clips.length > 0) {
         s.selectClip(clips[0].id);
         s.setGalleryOpen(true); // show the ranked results grid
+        refineWithScenes(clips);
       }
     };
 
@@ -467,7 +500,7 @@ export default function SourcePanel() {
             <p className="truncate font-medium text-slate-200">{source.name}</p>
             <p className="mt-0.5 text-slate-500">
               {formatTime(source.duration)} · {source.width}×{source.height} ·{" "}
-              {source.origin === "youtube" ? "YouTube" : "Upload"}
+              {source.origin === "youtube" ? "YouTube" : source.origin === "demo" ? "Demo" : "Upload"}
             </p>
           </div>
         )}

@@ -324,7 +324,7 @@ export interface SourceMedia {
   duration: number;
   width: number;
   height: number;
-  origin: "upload" | "youtube";
+  origin: "upload" | "youtube" | "demo";
 }
 
 // ---------------------------------------------------------------------------
@@ -384,7 +384,7 @@ export interface SavedProject {
   duration: number;
   width: number;
   height: number;
-  origin: "upload" | "youtube";
+  origin: "upload" | "youtube" | "demo";
   savedAt: number;
   state: {
     transcript: Transcript | null;

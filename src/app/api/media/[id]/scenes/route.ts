@@ -66,7 +66,12 @@ function detectCuts(
       "-ss", start.toFixed(3),
       "-t", dur.toFixed(3),
       "-i", mediaPath,
-      "-vf", `select='gt(scene,${threshold})',showinfo`,
+      "-an",
+      // Subsample and downscale *before* the scene filter. Comparing full
+      // 1080p frames costs ~10s per minute of video; at 8fps and 180p it is
+      // ~3x cheaper and finds the same cuts (verified against a source with
+      // known hard cuts), because a shot change is obvious at any resolution.
+      "-vf", `fps=8,scale=-2:180,select='gt(scene,${threshold})',showinfo`,
       "-f", "null",
       "-",
     ]);

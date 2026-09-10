@@ -2,46 +2,78 @@
      repo to a FREE Hugging Face Docker Space (16 GB RAM — enough to export)
      with no credit card. See DEPLOY.md. It is ignored when running elsewhere. -->
 ---
-title: ClipForge Studio
+title: Clip
 emoji: 🎬
-colorFrom: purple
-colorTo: indigo
+colorFrom: gray
+colorTo: gray
 sdk: docker
 app_port: 7860
 pinned: false
 ---
 
-# ClipForge Studio
+# Clip
 
-An AI-powered video clipping and editing studio for turning long-form video
-into viral-ready vertical clips — in the spirit of Opus Clip and Descript.
-Built with Next.js (App Router), TypeScript, Tailwind CSS, Zustand, FFmpeg,
-and OpenAI Whisper.
+The streamer-native, chat-aware, **explainable** AI clipper. It turns long
+streams and videos into viral-ready vertical clips and, unlike transcript-only
+tools, it ranks them by what the audience actually reacted to — then shows its
+reasoning. Next.js (App Router), TypeScript, Tailwind, Zustand, FFmpeg.
+
+Installable as a PWA: on a phone the side panels become bottom sheets, and a
+link shared from the YouTube or Twitch app imports itself.
 
 ## What it does
 
 **AI pipeline**
 
-- **Ingest** a YouTube URL or upload an MP4/MOV/WebM.
-- **Transcribe** with OpenAI Whisper (word-level timestamps). Without an
-  `OPENAI_API_KEY` the app stays fully usable offline with a clearly-labeled
-  demo transcript.
-- **Find viral clips (transparent, credit-free formula)**: a deterministic
-  virality model scores every moment and grows the best seeds into
-  candidates — **no API key or credits required**. Four axes, each 0–100:
-  - **Hook** — pattern hits, a question, and emotional intensity in the
-    *first ~3 s* (the scroll-stopper), plus a loud audio start.
-  - **Value** — payoff / number / framework language + emotional substance.
-  - **Trend** — format & hype patterns + intensity + emphasis + audio energy.
-  - **Flow** — pacing *consistency* across segments + a ~38 s length sweet spot.
-  - `overall = 0.34·hook + 0.26·value + 0.22·trend + 0.18·flow`, shown as a
-    score and letter grade with a plain-English reason.
-  Sentiment comes from a tiny built-in lexicon (no model download), and when
-  the decoded **audio waveform** is available, loud/hype moments boost the
-  score so exciting stream & gaming clips surface even with no keyword hook.
-  With an optional `OPENAI_API_KEY` the winners are additionally re-titled and
-  re-scored by an LLM — but the formula above is the contract and runs 100%
-  offline.
+- **Ingest** a YouTube / Twitch / Kick link or upload an MP4/MOV/WebM. Twitch
+  VODs additionally pull **time-aligned chat replay** (no account, no API key),
+  cached per media id — the signal the clip finder leads with. Clip streams you
+  hold the rights to; the importer says so.
+- **Transcribe** with word-level timestamps. The default path needs **no
+  account and no install**: a small Whisper model runs in your browser
+  (transformers.js, shipped with the app rather than pulled from a CDN). It
+  processes in bounded blocks in the background, streaming words in as they
+  land, so a long VOD neither blocks the UI nor exhausts memory. Failures name
+  the step that failed and offer a retry. `OPENAI_API_KEY` or `GROQ_API_KEY`
+  switch to cloud Whisper; with neither, a clearly-labeled demo transcript
+  keeps the editor usable.
+- **Find viral clips — multi-signal, and it works with no transcript at all.**
+  Transcript-only scoring is what every other clipper does, and it falls apart
+  on gaming and IRL streams where the best moment is a scream or a clutch play
+  rather than a quotable sentence. Clip slides a window across the source,
+  measures several independent signal families, normalizes each to a
+  **z-score over that specific video** — so a hype streamer and a calm one are
+  scored fairly — and fuses them into a 0–100 score:
+
+  - **Chat** *(Twitch VODs — the differentiator)*: message velocity, **distinct
+    chatters**, hype-emote and written-laughter rate, copypasta waves, and
+    explicit "clip it" requests. The audience already voted on what was funny
+    before any model looked at the footage, and this catches highlights the
+    streamer stays silent through. Unique-chatter count carries real weight, so
+    one person spamming can't outrank a genuine crowd. Chat leads the fusion
+    when it's available.
+  - **Acoustic**: peak and mean loudness, plus the quiet-then-burst shape that
+    marks a classic highlight.
+  - **Visual**: scene-cut density via the ffmpeg scene filter.
+  - **Language** *(when real words exist)*: hook patterns, sentiment intensity,
+    topic shifts, and speech density, scored from a built-in lexicon with no
+    model download.
+
+  A placeholder transcript is deliberately **ignored** for scoring — it
+  describes a different video, so its timings are fiction — unless it covers
+  most of the source, which is how the bundled demo footage still gets real
+  phrase titles.
+
+- **Every clip explains itself.** Each candidate carries a per-signal
+  breakdown rendered in the gallery, so a score is never an unexplained
+  number: *"Chat reaction: 13.9x chat volume, hype emotes spiking, copypasta
+  wave, 233 viewers asked to clip it."* Creators trust a ranking they can see
+  the reasoning behind, and they learn what makes their content land.
+
+  Four display axes (**Hook / Value / Trend / Flow**, each 0–100) are derived
+  from the fused signals and shown as letter grades. With an optional
+  `OPENAI_API_KEY` the winners are additionally re-titled by an LLM — but the
+  engine above is the contract and runs 100% offline.
 
 **Editor**
 
@@ -174,6 +206,10 @@ src/
 │     ├─ media/[id]/            # Range-aware streaming for <video>
 │     ├─ transcribe/            # Whisper (word timestamps) or demo fallback
 │     ├─ clips/detect/          # heuristics + optional LLM refinement
+│     ├─ media/[id]/audio/      # 16 kHz mono WAV for in-browser Whisper
+│     ├─ media/[id]/chat/       # cached Twitch chat replay
+│     ├─ media/[id]/scenes/     # scene-cut detection (visual signal)
+│     └─ media/[id]/waveform/   # decoded peaks (acoustic signal)
 │     ├─ projects/              # session autosave: list/save/load/delete
 │     ├─ demo/                  # generated demo footage (cached)
 │     └─ export/                # job queue: POST create, GET status/download
@@ -187,7 +223,11 @@ src/
 │  ├─ ffmpeg/                   # ASS subtitle builder + export filter graphs
 │  ├─ server/media.ts           # media store, ffprobe, ffmpeg runner
 │  └─ types.ts                  # shared domain types
-└─ services/ai/                 # transcription, caption grouping, clip finder
+└─ services/ai/
+   ├─ signalClipFinder.ts       # z-score fusion across signal families
+   ├─ chatSignals.ts            # chat velocity/emotes/copypasta/callouts
+   ├─ browserTranscribe.ts      # in-browser Whisper, block-wise
+   └─ clipFinder.ts             # language scoring + routing to the above
 ```
 
 Design notes:
@@ -208,6 +248,9 @@ Design notes:
 - YouTube ingest tries `@distube/ytdl-core` first and falls back to a
   system `yt-dlp` binary when present (`pip install yt-dlp`); with neither
   working it degrades to a clear "upload the file instead" error.
+- Chat replay is implemented for **Twitch VODs**; Kick links import video but
+  contribute no chat signal yet, so they fall back to audio and motion.
+- Real-time clipping on a live stream is not implemented — finished VODs only.
 - Subject tracking uses template matching / motion, not a face model — it
   follows whatever you dot, which also handles objects and products, not
   just faces. A dedicated face detector (e.g. MediaPipe, as OpenMontage's
@@ -220,4 +263,4 @@ Design notes:
 Several trajectory-smoothing and reframing techniques were studied from
 [OpenMontage](https://github.com/calesthio/OpenMontage) (AGPLv3) and
 **reimplemented independently** in TypeScript — no OpenMontage source is
-included or copied, so ClipForge is not a derivative work of it.
+included or copied, so Clip is not a derivative work of it.

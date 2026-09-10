@@ -40,6 +40,12 @@ export interface ClipFinderInputs {
   chat?: ChatMessage[];
   /** Source duration — required for transcript-free signal detection. */
   duration?: number;
+  /**
+   * Set only when a non-Whisper transcript genuinely describes this source —
+   * currently just the bundled demo footage, which is generated together with
+   * its transcript. Everything else treats a placeholder as fiction.
+   */
+  placeholderMatchesSource?: boolean;
 }
 
 /** Max normalized (0..1) audio energy in a [start,end) window. */
@@ -165,19 +171,18 @@ export function findClips(
 
   // A placeholder transcript describes a *different* video, so its segment
   // timings are fiction — scoring them would return clips pointing at the
-  // wrong moments. Whenever we don't have real words, fall back to the
-  // audio/visual signal engine, which needs no speech at all.
+  // wrong moments, with captions that don't match what is on screen. Whenever
+  // we don't have real words, fall back to the audio/visual signal engine,
+  // which needs no speech at all.
   //
-  // Coverage tells the two cases apart: the bundled demo footage ships with a
-  // transcript that genuinely matches it end to end, while the same demo text
-  // dropped on a real upload covers only its first minute.
-  const sourceDuration = inputs.duration ?? inputs.peaksDuration ?? 0;
-  const transcriptEnd = segments.length ? segments[segments.length - 1].end : 0;
-  const coversSource =
-    sourceDuration > 0 && transcriptEnd / sourceDuration >= 0.6;
+  // The one legitimate exception is the bundled demo footage, whose transcript
+  // is generated alongside it. Callers say so explicitly via
+  // `placeholderMatchesSource`; inferring it from how much of the runtime the
+  // transcript covers looked reasonable but misfired on any upload near the
+  // demo's own length, which is exactly when being wrong is least obvious.
   const wordsAreReal =
     segments.length > 0 &&
-    (transcript?.source === "whisper" || coversSource);
+    (transcript?.source === "whisper" || inputs.placeholderMatchesSource === true);
   if (!wordsAreReal) {
     return findClipsFromSignals(
       {
